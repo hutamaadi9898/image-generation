@@ -15,6 +15,12 @@ from typing import Any
 import boto3
 import runpod
 
+if os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") == "1":
+    try:
+        import hf_transfer  # noqa: F401
+    except ImportError:
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+
 
 TRAIN_SCRIPT_PATH = "/app/train_dreambooth_lora_sdxl.py"
 

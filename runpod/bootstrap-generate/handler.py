@@ -12,6 +12,13 @@ from typing import Any
 import boto3
 import runpod
 import torch
+
+if os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") == "1":
+    try:
+        import hf_transfer  # noqa: F401
+    except ImportError:
+        os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+
 from diffusers import StableDiffusionXLPipeline
 from PIL import Image
 
