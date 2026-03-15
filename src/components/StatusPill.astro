@@ -1,0 +1,15 @@
+---
+interface Props {
+  value: string;
+}
+
+const { value } = Astro.props;
+const tone =
+  value === "ready" || value === "succeeded" || value === "approved"
+    ? "is-positive"
+    : value === "failed" || value === "rejected" || value === "cancelled"
+      ? "is-negative"
+      : "is-neutral";
+---
+
+<span class:list={["status-pill", tone]}>{value.replace(/_/g, " ")}</span>

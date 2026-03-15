@@ -1,0 +1,210 @@
+---
+import { env } from "cloudflare:workers";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import StatusPill from "../../components/StatusPill.astro";
+import { createRepository } from "../../lib/server/repository";
+import { formatTimestamp } from "../../lib/ui";
+
+const repository = createRepository(env);
+const characters = repository ? await repository.listCharacters() : [];
+---
+
+<AdminLayout title="Characters">
+  <div class="stack">
+    <section class="hero">
+      <div class="stack">
+        <p class="eyebrow">Characters</p>
+        <h2>Fill the basics once, let Gemini draft the prompt pack, then save.</h2>
+        <p class="lede">
+          This page is optimized for personal use: short form, dark UI, and one button to draft a
+          reusable prompt bundle before you store the character.
+        </p>
+      </div>
+
+      <article class="form-card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">New character</p>
+            <h3>Create character</h3>
+          </div>
+          <span class="support-chip">Gemini assisted</span>
+        </div>
+        <form action="/api/characters" method="POST" data-async-form id="character-form">
+          <div class="form-grid">
+            <label>
+              Name
+              <input id="character-name" name="name" required placeholder="Mara Vale" />
+            </label>
+            <label>
+              Adult age
+              <input id="character-age" name="adultAgeYears" type="number" min="21" value="24" required />
+            </label>
+          </div>
+          <label>
+            Tagline
+            <input
+              id="character-tagline"
+              name="tagline"
+              required
+              placeholder="Noir lounge singer with precision posture"
+            />
+          </label>
+          <label>
+            Summary
+            <textarea
+              id="character-summary"
+              name="summary"
+              required
+              placeholder="Describe face shape, hair, gaze, styling mood, and body language."
+            ></textarea>
+          </label>
+          <div class="form-grid">
+            <label>
+              Identity traits
+              <textarea
+                id="character-identity-traits"
+                name="identityTraits"
+                placeholder="auburn bob, cat-eye liner, beauty mark, statuesque"
+              ></textarea>
+            </label>
+            <label>
+              Style tokens
+              <textarea
+                id="character-style-tokens"
+                name="styleTokens"
+                placeholder="editorial portrait, velvet dress, soft spotlight, cinematic"
+              ></textarea>
+            </label>
+          </div>
+          <label>
+            Negative tokens
+            <textarea
+              id="character-negative-tokens"
+              name="negativeTokens"
+              placeholder="minor, explicit nudity, celebrity, extra limbs, text"
+            ></textarea>
+          </label>
+          <label>
+            Outfit notes
+            <textarea
+              id="character-outfit-notes"
+              name="outfitNotes"
+              placeholder="Structured velvet dress, opera gloves, gold ear cuff."
+            ></textarea>
+          </label>
+          <div class="panel-subtle">
+            <div class="button-row">
+              <button type="button" class="secondary" id="generate-character-prompt">
+                Generate prompt with Gemini
+              </button>
+              <p class="form-status" id="prompt-helper-status">
+                Fill at least a name, tagline, or summary, then let Gemini draft the prompt fields.
+              </p>
+            </div>
+          </div>
+          <label>
+            Prompt template
+            <textarea
+              id="character-prompt-template"
+              name="promptTemplate"
+              required
+              placeholder="adult original woman, auburn bob, editorial portrait, cinematic light, poised stance"
+            ></textarea>
+          </label>
+          <label>
+            Negative prompt
+            <textarea
+              id="character-negative-prompt"
+              name="negativePrompt"
+              required
+              placeholder="explicit sexual act, visible genitals, underage, celebrity, franchise character"
+            ></textarea>
+          </label>
+          <div class="button-row">
+            <button type="submit">Save character</button>
+            <p class="form-status" data-form-status></p>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section class="character-grid">
+      {
+        characters.length ? (
+          characters.map((character) => (
+            <article class="character-card">
+              <div class="section-header">
+                <div>
+                  <p class="eyebrow">Updated {formatTimestamp(character.updatedAt)}</p>
+                  <h3>{character.name}</h3>
+                </div>
+                <StatusPill value={character.status} />
+              </div>
+              <p class="support-text">{character.tagline}</p>
+              <div class="tag-row">
+                {character.identityTraits.slice(0, 5).map((item) => <span class="token">{item}</span>)}
+              </div>
+              <div class="button-row">
+                <a class="button-link secondary" href={`/characters/${character.id}`}>Open record</a>
+              </div>
+            </article>
+          ))
+        ) : (
+          <article class="panel">
+            <p class="muted">No characters yet. Create the first one from the form above.</p>
+          </article>
+        )
+      }
+    </section>
+  </div>
+
+  <script is:inline>
+    const characterForm = document.querySelector("#character-form");
+    const promptButton = document.querySelector("#generate-character-prompt");
+    const promptStatus = document.querySelector("#prompt-helper-status");
+    const fields = {
+      tagline: document.querySelector("#character-tagline"),
+      summary: document.querySelector("#character-summary"),
+      identityTraits: document.querySelector("#character-identity-traits"),
+      styleTokens: document.querySelector("#character-style-tokens"),
+      negativeTokens: document.querySelector("#character-negative-tokens"),
+      promptTemplate: document.querySelector("#character-prompt-template"),
+      negativePrompt: document.querySelector("#character-negative-prompt")
+    };
+
+    promptButton?.addEventListener("click", async () => {
+      if (!(characterForm instanceof HTMLFormElement)) return;
+      if (promptStatus) promptStatus.textContent = "Generating prompt draft...";
+      promptButton.setAttribute("disabled", "disabled");
+
+      const payload = Object.fromEntries(new FormData(characterForm).entries());
+      const response = await fetch("/api/characters/prompt", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json().catch(() => null);
+      promptButton.removeAttribute("disabled");
+
+      if (!result?.ok || !result.suggestion) {
+        if (promptStatus) {
+          promptStatus.textContent = result?.message ?? "Gemini prompt generation failed.";
+        }
+        return;
+      }
+
+      fields.tagline.value = result.suggestion.tagline ?? fields.tagline.value;
+      fields.summary.value = result.suggestion.summary ?? fields.summary.value;
+      fields.identityTraits.value = (result.suggestion.identityTraits ?? []).join(", ");
+      fields.styleTokens.value = (result.suggestion.styleTokens ?? []).join(", ");
+      fields.negativeTokens.value = (result.suggestion.negativeTokens ?? []).join(", ");
+      fields.promptTemplate.value = result.suggestion.promptTemplate ?? "";
+      fields.negativePrompt.value = result.suggestion.negativePrompt ?? "";
+
+      if (promptStatus) promptStatus.textContent = "Prompt fields updated from Gemini.";
+    });
+  </script>
+</AdminLayout>

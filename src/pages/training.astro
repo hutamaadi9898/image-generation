@@ -1,0 +1,155 @@
+---
+import { env } from "cloudflare:workers";
+import AdminLayout from "../layouts/AdminLayout.astro";
+import StatusPill from "../components/StatusPill.astro";
+import { createRepository } from "../lib/server/repository";
+import { formatTimestamp } from "../lib/ui";
+
+const repository = createRepository(env);
+const [characters, references, loras, jobs] = repository
+  ? await Promise.all([
+      repository.listCharacters(),
+      repository.listReferenceImages(),
+      repository.listLoraVersions(),
+      repository.listJobs()
+    ])
+  : [[], [], [], []];
+
+const approvedCounts = references.reduce<Record<string, number>>((acc, reference) => {
+  if (reference.status === "approved") {
+    acc[reference.characterId] = (acc[reference.characterId] ?? 0) + 1;
+  }
+  return acc;
+}, {});
+---
+
+<AdminLayout title="Training">
+  <div class="stack">
+    <section class="hero">
+      <div class="stack">
+        <p class="eyebrow">Training</p>
+        <h2>Version each LoRA artifact deliberately, with traceable datasets and job history.</h2>
+        <p class="lede">
+          Every train request writes a version row before it dispatches to RunPod, so artifact paths,
+          retries, and webhook completion stay deterministic.
+        </p>
+      </div>
+      <article class="panel">
+        <p class="eyebrow">Readiness</p>
+        <h3>{characters.filter((item) => (approvedCounts[item.id] ?? 0) >= 20).length} characters meet the 20-image gate</h3>
+        <p class="support-text">Use each character page to launch training with versioned output paths.</p>
+      </article>
+    </section>
+
+    <section class="panel-grid">
+      <article class="panel">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Eligible characters</p>
+            <h3>Dataset to LoRA handoff</h3>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Character</th>
+                <th>Approved refs</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                characters.length ? (
+                  characters.map((character) => (
+                    <tr>
+                      <td>
+                        <a href={`/characters/${character.id}`}>{character.name}</a>
+                      </td>
+                      <td>{approvedCounts[character.id] ?? 0}</td>
+                      <td>
+                        <StatusPill value={character.status} />
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" class="muted">No characters available.</td>
+                  </tr>
+                )
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">LoRA versions</p>
+            <h3>Artifact inventory</h3>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Completed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                loras.length ? (
+                  loras.map((version) => (
+                    <tr>
+                      <td>v{version.versionNumber}</td>
+                      <td>
+                        <StatusPill value={version.status} />
+                      </td>
+                      <td>{formatTimestamp(version.completedAt ?? version.createdAt)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" class="muted">No LoRA versions recorded yet.</td>
+                  </tr>
+                )
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Job feed</p>
+          <h3>Recent training and inference jobs</h3>
+        </div>
+      </div>
+      <div class="job-grid">
+        {
+          jobs.length ? (
+            jobs.map((job) => (
+              <article class="job-card" data-job-card data-job-id={job.id} data-job-status={job.status}>
+                <div class="section-header">
+                  <div>
+                    <p class="eyebrow">{job.type.replace(/_/g, " ")}</p>
+                    <h3>{formatTimestamp(job.submittedAt)}</h3>
+                  </div>
+                  <StatusPill value={job.status} />
+                </div>
+                <p class="support-text">{job.errorMessage ?? job.outputPrefix}</p>
+              </article>
+            ))
+          ) : (
+            <p class="muted">No jobs submitted yet.</p>
+          )
+        }
+      </div>
+    </section>
+  </div>
+</AdminLayout>

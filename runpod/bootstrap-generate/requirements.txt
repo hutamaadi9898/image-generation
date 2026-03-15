@@ -1,0 +1,8 @@
+runpod==1.7.13
+boto3==1.39.10
+diffusers==0.35.1
+peft==0.17.1
+Pillow==11.3.0
+safetensors==0.6.2
+torch==2.8.0
+transformers==4.56.1

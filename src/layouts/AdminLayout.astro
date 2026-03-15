@@ -1,0 +1,102 @@
+---
+import "../styles/app.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Private character operations dashboard" } = Astro.props;
+const pathname = Astro.url.pathname;
+const nav = [
+  { href: "/", label: "Dashboard" },
+  { href: "/characters", label: "Characters" },
+  { href: "/dataset-review", label: "Review" },
+  { href: "/training", label: "Train" },
+  { href: "/generate", label: "Generate" },
+  { href: "/gallery", label: "Gallery" }
+];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="side-rail">
+        <p class="product-kicker">Personal Workspace</p>
+        <h1>Character Forge</h1>
+        <p class="side-copy">
+          Private prompt, dataset, training, and generation control in one place.
+        </p>
+        <nav aria-label="Primary">
+          <ul class="nav-list">
+            {
+              nav.map((item) => (
+                <li>
+                  <a class:list={["nav-link", pathname === item.href && "is-active"]} href={item.href}>
+                    {item.label}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </nav>
+        <p class="rail-note">Gemini drafts prompts. RunPod handles GPU jobs. Cloudflare stores state.</p>
+      </aside>
+
+      <main class="main-stage">
+        <slot />
+      </main>
+    </div>
+
+    <script is:inline>
+      const forms = document.querySelectorAll("[data-async-form]");
+      for (const form of forms) {
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const target = event.currentTarget;
+          if (!(target instanceof HTMLFormElement)) return;
+          const status = target.querySelector("[data-form-status]");
+          if (status) status.textContent = "Submitting...";
+          const response = await fetch(target.action, {
+            method: target.method || "POST",
+            body: new FormData(target)
+          });
+          const payload = await response.json().catch(() => ({ ok: false, message: "Request failed." }));
+          if (status) {
+            const detail = payload.issues?.length ? ` ${payload.issues.join(" ")}` : "";
+            status.textContent = payload.ok ? "Saved." : `${payload.message ?? "Request failed."}${detail}`;
+          }
+          if (payload.ok) {
+            const behavior = target.dataset.success ?? "reload";
+            if (behavior === "reload") window.location.reload();
+            if (behavior === "redirect" && payload.redirectTo) window.location.href = payload.redirectTo;
+          }
+        });
+      }
+
+      const jobs = document.querySelectorAll("[data-job-card]");
+      for (const card of jobs) {
+        const status = card.getAttribute("data-job-status");
+        const jobId = card.getAttribute("data-job-id");
+        if (!jobId || (status !== "queued" && status !== "running")) continue;
+        window.setInterval(async () => {
+          const response = await fetch(`/api/jobs/${jobId}?sync=1`);
+          const payload = await response.json().catch(() => null);
+          if (!payload?.job) return;
+          if (payload.job.status !== "queued" && payload.job.status !== "running") {
+            window.location.reload();
+          }
+        }, 12000);
+      }
+    </script>
+  </body>
+</html>

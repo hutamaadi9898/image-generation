@@ -1,0 +1,233 @@
+---
+import { env } from "cloudflare:workers";
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import StatusPill from "../../components/StatusPill.astro";
+import { createRepository } from "../../lib/server/repository";
+import { assetPath, formatTimestamp, titleCase } from "../../lib/ui";
+
+const repository = createRepository(env);
+const characterId = Astro.params.id ?? "";
+const character = repository ? await repository.getCharacter(characterId) : null;
+const [promptProfiles, references, loras, jobs] =
+  repository && character
+    ? await Promise.all([
+        repository.listPromptProfiles(character.id),
+        repository.listReferenceImages({ characterId: character.id }),
+        repository.listLoraVersions(character.id),
+        repository.listJobs()
+      ])
+    : [[], [], [], []];
+const approvedCount = references.filter((item) => item.status === "approved").length;
+const pendingCount = references.filter((item) => item.status === "pending").length;
+const characterJobs = jobs.filter((job) => job.characterId === characterId);
+---
+
+<AdminLayout title={character ? `${character.name} | Character` : "Character"}>
+  {
+    !character ? (
+      <section class="panel">
+        <p class="muted">Character not found.</p>
+      </section>
+    ) : (
+      <div class="stack">
+        <section class="hero">
+          <div class="stack">
+            <p class="eyebrow">Character Record</p>
+            <h2>{character.name}</h2>
+            <p class="lede">{character.tagline}</p>
+            <div class="button-row">
+              <StatusPill value={character.status} />
+              <span class="support-chip">{approvedCount} approved refs</span>
+              <span class="support-chip">{loras.length} LoRA versions</span>
+            </div>
+            <p class="support-text">{character.summary}</p>
+            <div class="tag-row">
+              {character.identityTraits.map((item) => <span class="token">{item}</span>)}
+            </div>
+          </div>
+
+          <div class="stack">
+            <article class="form-card">
+              <h3>Launch bootstrap batch</h3>
+              <form action={`/api/characters/${character.id}/bootstrap`} method="POST" data-async-form>
+                <label>
+                  Target image count
+                  <input name="targetCount" type="number" min="20" max="150" value="96" />
+                </label>
+                <label>
+                  Seeds
+                  <input name="seeds" placeholder="101, 202, 303, 404" />
+                </label>
+                <div class="button-row">
+                  <button type="submit">Submit bootstrap</button>
+                  <p class="form-status" data-form-status></p>
+                </div>
+              </form>
+            </article>
+
+            <article class="form-card">
+              <h3>Launch training</h3>
+              <form action={`/api/characters/${character.id}/train`} method="POST" data-async-form>
+                <label>
+                  Base model id
+                  <input
+                    name="baseModelId"
+                    value="stabilityai/stable-diffusion-xl-base-1.0"
+                  />
+                </label>
+                <div class="form-grid">
+                  <label>
+                    Rank
+                    <input name="rank" type="number" value="16" />
+                  </label>
+                  <label>
+                    Steps
+                    <input name="steps" type="number" value="1200" />
+                  </label>
+                </div>
+                <label>
+                  Learning rate
+                  <input name="learningRate" type="number" step="0.00001" value="0.0001" />
+                </label>
+                <div class="button-row">
+                  <button type="submit" class="secondary">Queue training</button>
+                  <p class="form-status" data-form-status></p>
+                </div>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section class="detail-grid">
+          <article class="panel">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Prompt profile</p>
+                <h3>{promptProfiles[0]?.label ?? "Default"}</h3>
+              </div>
+            </div>
+            <p class="support-text">{promptProfiles[0]?.promptTemplate ?? "No prompt profile saved."}</p>
+            <div class="tag-row">
+              {(promptProfiles[0]?.styleTokens ?? []).map((item) => <span class="token">{item}</span>)}
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Dataset state</p>
+                <h3>Approval gate</h3>
+              </div>
+            </div>
+            <ul class="stat-list stack">
+              <li>{approvedCount} images approved for training.</li>
+              <li>{pendingCount} images still waiting on review.</li>
+              <li>Training unlocks automatically after 20 approvals.</li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">References</p>
+              <h3>Bootstrap output review</h3>
+            </div>
+          </div>
+          <div class="image-grid">
+            {
+              references.length ? (
+                references.slice(0, 8).map((reference) => (
+                  <article class="image-card">
+                    <img
+                      src={assetPath(reference.r2Key)}
+                      alt={`Reference seed ${reference.seed}`}
+                      loading="lazy"
+                    />
+                    <div class="button-row">
+                      <StatusPill value={reference.status} />
+                      <span class="support-chip">Seed {reference.seed}</span>
+                    </div>
+                    <p class="support-text">{reference.promptSnapshot}</p>
+                  </article>
+                ))
+              ) : (
+                <p class="muted">No bootstrap images recorded yet.</p>
+              )
+            }
+          </div>
+        </section>
+
+        <section class="panel-grid">
+          <article class="panel">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">LoRA versions</p>
+                <h3>Training lineage</h3>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Status</th>
+                    <th>Artifact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {
+                    loras.length ? (
+                      loras.map((version) => (
+                        <tr>
+                          <td>v{version.versionNumber}</td>
+                          <td>
+                            <StatusPill value={version.status} />
+                          </td>
+                          <td>{version.artifactR2Key ?? "Pending"}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="3" class="muted">No training versions queued yet.</td>
+                      </tr>
+                    )
+                  }
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Character jobs</p>
+                <h3>Execution log</h3>
+              </div>
+            </div>
+            <div class="stack">
+              {
+                characterJobs.length ? (
+                  characterJobs.map((job) => (
+                    <article class="job-card" data-job-card data-job-id={job.id} data-job-status={job.status}>
+                      <div class="section-header">
+                        <div>
+                          <p class="eyebrow">{titleCase(job.type)}</p>
+                          <h3>{formatTimestamp(job.submittedAt)}</h3>
+                        </div>
+                        <StatusPill value={job.status} />
+                      </div>
+                      <p class="table-note">{job.errorMessage ?? job.outputPrefix}</p>
+                    </article>
+                  ))
+                ) : (
+                  <p class="muted">No jobs for this character yet.</p>
+                )
+              }
+            </div>
+          </article>
+        </section>
+      </div>
+    )
+  }
+</AdminLayout>

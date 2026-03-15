@@ -1,0 +1,179 @@
+---
+import { env } from "cloudflare:workers";
+import AdminLayout from "../layouts/AdminLayout.astro";
+import MetricCard from "../components/MetricCard.astro";
+import StatusPill from "../components/StatusPill.astro";
+import { createRepository } from "../lib/server/repository";
+import { formatTimestamp, titleCase } from "../lib/ui";
+
+const repository = createRepository(env);
+const [summary, characters, jobs] = repository
+  ? await Promise.all([
+      repository.getDashboardSummary(),
+      repository.listCharacters(),
+      repository.listJobs()
+    ])
+  : [
+      {
+        totalCharacters: 0,
+        pendingReferences: 0,
+        readyLoras: 0,
+        runningJobs: 0
+      },
+      [],
+      []
+    ];
+---
+
+<AdminLayout title="Character Forge Dashboard">
+  <div class="stack">
+    <section class="hero">
+      <div class="stack">
+        <p class="eyebrow">Async Control Plane</p>
+        <h2>Curate first. Train second. Generate only from approved identity anchors.</h2>
+        <p class="lede">
+          This admin shell is built for one operator to take an original adult character from
+          structured spec to LoRA-backed outputs without touching RunPod or Cloudflare consoles.
+        </p>
+        <div class="hero-actions">
+          <a class="button-link" href="/characters">Create character</a>
+          <a class="button-link secondary" href="/dataset-review">Review dataset</a>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Guardrails</p>
+            <h3>Policy before compute</h3>
+          </div>
+        </div>
+        <ul class="stat-list stack">
+          <li>Blocks explicit sex acts, visible genitals, coercion, incest, and bestiality.</li>
+          <li>Rejects minors, school-age framing, celebrity likenesses, and named franchise characters.</li>
+          <li>Requires manual image approval before LoRA training can start.</li>
+        </ul>
+      </div>
+    </section>
+
+    {
+      !repository && (
+        <section class="config-banner">
+          <p class="eyebrow">Configuration</p>
+          <p>
+            D1 is not bound in the current environment, so the UI is running in shell mode. Add the
+            `DB` and `ARTIFACTS` bindings in `wrangler.jsonc` and apply the migration before using
+            mutations.
+          </p>
+        </section>
+      )
+    }
+
+    <section class="stats-grid">
+      <MetricCard
+        label="Characters"
+        value={summary.totalCharacters}
+        detail="Original character specs currently tracked in D1."
+      />
+      <MetricCard
+        label="Pending Review"
+        value={summary.pendingReferences}
+        detail="Bootstrap images waiting for manual approval or rejection."
+      />
+      <MetricCard
+        label="Ready LoRAs"
+        value={summary.readyLoras}
+        detail="Completed character versions available for generation."
+      />
+      <MetricCard
+        label="Running Jobs"
+        value={summary.runningJobs}
+        detail="Queued or active RunPod tasks tracked by the job orchestrator."
+      />
+    </section>
+
+    <section class="panel-grid">
+      <article class="panel">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Recent characters</p>
+            <h3>Identity pipeline</h3>
+          </div>
+          <a href="/characters" class="support-chip">Open characters</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                characters.length ? (
+                  characters.slice(0, 6).map((character) => (
+                    <tr>
+                      <td>
+                        <a href={`/characters/${character.id}`}>{character.name}</a>
+                      </td>
+                      <td>
+                        <StatusPill value={character.status} />
+                      </td>
+                      <td>{formatTimestamp(character.updatedAt)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" class="muted">No characters have been created yet.</td>
+                  </tr>
+                )
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Recent jobs</p>
+            <h3>Orchestration queue</h3>
+          </div>
+          <a href="/training" class="support-chip">Open training</a>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Job</th>
+                <th>Status</th>
+                <th>Submitted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                jobs.length ? (
+                  jobs.slice(0, 6).map((job) => (
+                    <tr>
+                      <td>{titleCase(job.type)}</td>
+                      <td>
+                        <StatusPill value={job.status} />
+                      </td>
+                      <td>{formatTimestamp(job.submittedAt)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" class="muted">No async jobs have been submitted yet.</td>
+                  </tr>
+                )
+              }
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </div>
+</AdminLayout>

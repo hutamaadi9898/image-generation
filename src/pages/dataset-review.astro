@@ -1,0 +1,73 @@
+---
+import { env } from "cloudflare:workers";
+import AdminLayout from "../layouts/AdminLayout.astro";
+import StatusPill from "../components/StatusPill.astro";
+import { createRepository } from "../lib/server/repository";
+import { assetPath } from "../lib/ui";
+
+const repository = createRepository(env);
+const references = repository ? await repository.listReferenceImages({ status: "pending" }) : [];
+const characters = repository ? await repository.listCharacters() : [];
+const characterNames = new Map(characters.map((item) => [item.id, item.name]));
+---
+
+<AdminLayout title="Dataset Review">
+  <div class="stack">
+    <section class="hero">
+      <div class="stack">
+        <p class="eyebrow">Dataset Review</p>
+        <h2>Approve only the images that preserve the face, hair, and outfit language you want to train.</h2>
+        <p class="lede">
+          This is the quality gate that matters most. Keep the dataset narrow and recognizable before
+          the LoRA worker ever starts.
+        </p>
+      </div>
+      <article class="panel">
+        <p class="eyebrow">Queue state</p>
+        <h3>{references.length} images pending manual review</h3>
+        <p class="support-text">
+          Approved images become training inputs. Rejected images stay recorded for traceability but
+          never enter the LoRA dataset.
+        </p>
+      </article>
+    </section>
+
+    <section class="reference-layout">
+      {
+        references.length ? (
+          references.map((reference) => (
+            <article class="image-card">
+              <img src={assetPath(reference.r2Key)} alt={`Reference seed ${reference.seed}`} loading="lazy" />
+              <div class="button-row">
+                <StatusPill value={reference.status} />
+                <span class="support-chip">{characterNames.get(reference.characterId) ?? "Unknown"}</span>
+                <span class="support-chip">Seed {reference.seed}</span>
+              </div>
+              <p class="support-text">{reference.promptSnapshot}</p>
+              <form
+                class="decision-form"
+                action={`/api/reference-images/${reference.id}/approve`}
+                method="POST"
+                data-async-form
+              >
+                <label>
+                  Reviewer notes
+                  <textarea name="reviewerNotes" placeholder="State what made this usable or unusable."></textarea>
+                </label>
+                <div class="button-row">
+                  <button type="submit" name="decision" value="approved">Approve</button>
+                  <button type="submit" name="decision" value="rejected" class="secondary">Reject</button>
+                </div>
+                <p class="form-status" data-form-status></p>
+              </form>
+            </article>
+          ))
+        ) : (
+          <article class="panel">
+            <p class="muted">No pending reference images right now.</p>
+          </article>
+        )
+      }
+    </section>
+  </div>
+</AdminLayout>

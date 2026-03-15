@@ -1,0 +1,155 @@
+---
+import { env } from "cloudflare:workers";
+import AdminLayout from "../layouts/AdminLayout.astro";
+import StatusPill from "../components/StatusPill.astro";
+import { createRepository } from "../lib/server/repository";
+import { formatTimestamp } from "../lib/ui";
+
+const repository = createRepository(env);
+const [characters, promptProfiles, loras, jobs] = repository
+  ? await Promise.all([
+      repository.listCharacters(),
+      repository.listPromptProfiles(),
+      repository.listLoraVersions(),
+      repository.listJobs()
+    ])
+  : [[], [], [], []];
+
+const readyVersions = loras.filter((version) => version.status === "ready");
+const promptProfileByCharacter = new Map(
+  promptProfiles.map((profile) => [profile.characterId, profile])
+);
+const characterNameById = new Map(characters.map((character) => [character.id, character.name]));
+---
+
+<AdminLayout title="Generate">
+  <div class="stack">
+    <section class="hero">
+      <div class="stack">
+        <p class="eyebrow">Generate</p>
+        <h2>Apply a stable prompt preset to a ready LoRA, then iterate across seeds without losing identity cues.</h2>
+        <p class="lede">
+          The generation API reuses the inference worker, stores output metadata in D1, and writes
+          final images into R2 under a job-scoped prefix.
+        </p>
+      </div>
+
+      <article class="form-card">
+        <h3>Queue generation</h3>
+        <form action="/api/generations" method="POST" data-async-form>
+          <label>
+            Character
+            <select name="characterId" id="character-select" required>
+              <option value="">Select a character</option>
+              {
+                characters.map((character) => (
+                  <option
+                    value={character.id}
+                    data-prompt={promptProfileByCharacter.get(character.id)?.promptTemplate ?? ""}
+                    data-negative={promptProfileByCharacter.get(character.id)?.negativePrompt ?? ""}
+                  >
+                    {character.name}
+                  </option>
+                ))
+              }
+            </select>
+          </label>
+          <label>
+            LoRA version
+            <select name="loraVersionId" required>
+              <option value="">Select a ready version</option>
+              {
+                readyVersions.map((version) => (
+                  <option value={version.id} data-character-id={version.characterId}>
+                    {characterNameById.get(version.characterId) ?? version.characterId} / v{version.versionNumber}
+                  </option>
+                ))
+              }
+            </select>
+          </label>
+          <label>
+            Prompt template
+            <textarea id="prompt-template" name="promptTemplate" required></textarea>
+          </label>
+          <label>
+            Negative prompt
+            <textarea id="negative-prompt" name="negativePrompt" required></textarea>
+          </label>
+          <div class="form-grid">
+            <label>
+              Aspect ratio
+              <select name="aspectRatio">
+                <option value="3:4">3:4 portrait</option>
+                <option value="1:1">1:1 square</option>
+                <option value="16:9">16:9 wide</option>
+              </select>
+            </label>
+            <label>
+              Image count
+              <input name="imageCount" type="number" min="1" max="8" value="4" />
+            </label>
+          </div>
+          <label>
+            Seeds
+            <input name="seeds" placeholder="441, 782, 913, 1201" />
+          </label>
+          <div class="button-row">
+            <button type="submit">Start generation</button>
+            <p class="form-status" data-form-status></p>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-header">
+        <div>
+          <p class="eyebrow">Recent generation jobs</p>
+          <h3>Async output queue</h3>
+        </div>
+      </div>
+      <div class="job-grid">
+        {
+          jobs.filter((job) => job.type === "generate").length ? (
+            jobs
+              .filter((job) => job.type === "generate")
+              .map((job) => (
+                <article class="job-card" data-job-card data-job-id={job.id} data-job-status={job.status}>
+                  <div class="section-header">
+                    <div>
+                      <p class="eyebrow">Seeds {job.seedValues.join(", ")}</p>
+                      <h3>{formatTimestamp(job.submittedAt)}</h3>
+                    </div>
+                    <StatusPill value={job.status} />
+                  </div>
+                  <p class="support-text">{job.promptTemplate}</p>
+                </article>
+              ))
+          ) : (
+            <p class="muted">No generation jobs have been queued yet.</p>
+          )
+        }
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    const characterSelect = document.querySelector("#character-select");
+    const promptTemplate = document.querySelector("#prompt-template");
+    const negativePrompt = document.querySelector("#negative-prompt");
+    characterSelect?.addEventListener("change", (event) => {
+    const option = event.target.selectedOptions?.[0];
+      const loraSelect = document.querySelector('select[name="loraVersionId"]');
+      if (!option || !promptTemplate || !negativePrompt || !loraSelect) return;
+      promptTemplate.value = option.dataset.prompt ?? "";
+      negativePrompt.value = option.dataset.negative ?? "";
+      for (const loraOption of loraSelect.querySelectorAll("option[data-character-id]")) {
+        const shouldShow = loraOption.dataset.characterId === option.value;
+        loraOption.hidden = !shouldShow;
+      }
+      if (loraSelect.selectedOptions[0]?.hidden) {
+        loraSelect.value = "";
+      }
+    });
+  </script>
+</AdminLayout>

@@ -1,0 +1,64 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "image-generator",
+	"main": "@astrojs/cloudflare/entrypoints/server",
+	"compatibility_date": "2025-09-27",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"disable_nodejs_process_v2",
+		"global_fetch_strictly_public"
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "image-generator-db",
+			"database_id": "771fb97b-7072-4b0f-864e-162b378a3377",
+			"migrations_dir": "migrations"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "ARTIFACTS",
+			"bucket_name": "image-generator-artifacts"
+		}
+	],
+	"vars": {
+		"APP_BASE_URL": "https://image-generator.hutama39.workers.dev",
+		"RUNPOD_STATUS_POLL_ENABLED": "true",
+		"GEMINI_MODEL": "gemini-3-flash-preview"
+	},
+	"assets": {
+		"binding": "ASSETS",
+		"directory": "./dist"
+	},
+	"observability": {
+		"enabled": true
+	}
+	/**
+	 * Smart Placement
+	 * https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+	 */
+	// "placement": {  "mode": "smart" }
+	/**
+	 * Bindings
+	 * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+	 * databases, object storage, AI inference, real-time communication and more.
+	 * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+	 */
+	/**
+	 * Environment Variables
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 * Note: Use secrets to store sensitive data.
+	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 */
+	// "vars": {  "MY_VARIABLE": "production_value" }
+	/**
+	 * Service Bindings (communicate between multiple Workers)
+	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
+	 */
+	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
+}

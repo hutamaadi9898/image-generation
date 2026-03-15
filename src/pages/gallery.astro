@@ -1,0 +1,54 @@
+---
+import { env } from "cloudflare:workers";
+import AdminLayout from "../layouts/AdminLayout.astro";
+import { createRepository } from "../lib/server/repository";
+import { assetPath, formatTimestamp } from "../lib/ui";
+
+const repository = createRepository(env);
+const images = repository ? await repository.listGeneratedImages() : [];
+const characters = repository ? await repository.listCharacters() : [];
+const characterNames = new Map(characters.map((item) => [item.id, item.name]));
+---
+
+<AdminLayout title="Gallery">
+  <div class="stack">
+    <section class="hero">
+      <div class="stack">
+        <p class="eyebrow">Gallery</p>
+        <h2>Review final outputs with prompt and seed metadata attached to every frame.</h2>
+        <p class="lede">
+          The gallery is fed from R2 object keys stored in D1, which keeps seed replay and audit
+          trails attached to the exact output set that shipped.
+        </p>
+      </div>
+      <article class="panel">
+        <p class="eyebrow">Output inventory</p>
+        <h3>{images.length} generated images stored in R2</h3>
+        <p class="support-text">Use the seed badges to rerun strong compositions from the Generate page.</p>
+      </article>
+    </section>
+
+    <section class="image-grid">
+      {
+        images.length ? (
+          images.map((image) => (
+            <article class="image-card">
+              <img src={assetPath(image.r2Key)} alt={`Generated seed ${image.seed}`} loading="lazy" />
+              <h3>{characterNames.get(image.characterId) ?? "Unknown character"}</h3>
+              <ul class="inline-metadata">
+                <li>Seed {image.seed}</li>
+                <li>{formatTimestamp(image.createdAt)}</li>
+                <li>{image.width ?? "?"}×{image.height ?? "?"}</li>
+              </ul>
+              <p class="support-text">{image.promptSnapshot}</p>
+            </article>
+          ))
+        ) : (
+          <article class="panel">
+            <p class="muted">No generated images yet.</p>
+          </article>
+        )
+      }
+    </section>
+  </div>
+</AdminLayout>
