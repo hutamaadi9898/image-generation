@@ -39,7 +39,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     const job = await repository.createBootstrapJob(character, targetCount, seeds);
     internalJobId = job.id;
     const config = requireComfyUiConfig(env);
-    const { prompt, negativePrompt } = buildBootstrapPromptText(character, promptProfile);
+    const { prompt, negativePrompt } = buildBootstrapPromptText(
+      character,
+      promptProfile,
+      config.checkpointFilename
+    );
     const expandedSeeds = expandSeeds(seeds, targetCount);
     const { width, height } = dimensionsForAspectRatio("3:4");
 

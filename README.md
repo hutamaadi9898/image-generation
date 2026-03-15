@@ -99,6 +99,28 @@ COMFYUI_CHECKPOINT_FILENAME=ponyDiffusionV6XL_v6StartWithThisOne.safetensors
 
 If you use a different checkpoint, only the filename secret needs to change.
 
+## Default Workflow In This Repo
+
+The current ComfyUI graph is tuned for Pony-style anime generation:
+
+- checkpoint: `Pony Diffusion V6 XL`
+- sampler: `euler_ancestral`
+- scheduler: `karras`
+- steps: `25`
+- native generation sizes: `1024x1024`, `1024x1344`, `1344x768`
+- CLIP skip: `2`
+
+Prompt formatting is also Pony-oriented:
+
+- positive prompt prefix: `score_9, score_8_up, score_7_up, score_6_up, source_anime, rating_explicit`
+- negative prompt prefix: `score_4, score_5, score_6, source_pony, source_furry, chibi, monochrome, 3d`
+
+Training defaults are aligned to the Pony Hugging Face model id:
+
+```text
+LyliaEngine/Pony_Diffusion_V6_XL
+```
+
 ## Pod Architecture
 
 This repo now assumes two Pods:
@@ -166,6 +188,12 @@ Set these env vars on the training Pod:
 - `TRAIN_POD_BEARER_TOKEN=<optional shared bearer token>`
 - `HF_TOKEN=<optional if your base model requires auth>`
 - `TRAIN_RESOLUTION=1024`
+
+The app now defaults the character training form to:
+
+```text
+LyliaEngine/Pony_Diffusion_V6_XL
+```
 
 Then set the Worker secret:
 
@@ -293,3 +321,5 @@ Check:
 - RunPod ComfyUI on Pods: https://docs.runpod.io/tutorials/serverless/comfyui
 - ComfyUI API example: https://github.com/comfyanonymous/ComfyUI/blob/master/script_examples/basic_api_example.py
 - ComfyUI websocket/history example: https://github.com/comfyanonymous/ComfyUI/blob/master/script_examples/websockets_api_example.py
+- Pony Diffusion V6 XL model card: https://huggingface.co/LyliaEngine/Pony_Diffusion_V6_XL
+- Pony anime workflow note: https://comfyui.org/vi/comfyui-workflows/versatile-comfyui-workflow-for-creating-consistent-anime-characters-with-pony-xl

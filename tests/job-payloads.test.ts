@@ -5,7 +5,8 @@ import {
   buildGenerationPromptText,
   buildTrainingPayload,
   dimensionsForAspectRatio,
-  expandSeeds
+  expandSeeds,
+  PONY_BASE_MODEL_ID
 } from "../src/lib/server/job-payloads";
 import type { CharacterRecord, GenerationInput, LoraVersionRecord, PromptProfileRecord } from "../src/lib/domain";
 
@@ -42,7 +43,7 @@ const version: LoraVersionRecord = {
   characterId: "char_1",
   versionNumber: 3,
   jobId: "job_train",
-  baseModelId: "stabilityai/stable-diffusion-xl-base-1.0",
+  baseModelId: PONY_BASE_MODEL_ID,
   artifactR2Key: "mara-vale/v3/mara-vale-v3.safetensors",
   metadataJson: "{}",
   status: "ready",
@@ -62,21 +63,24 @@ const generationInput: GenerationInput = {
 
 describe("job payload builders", () => {
   it("builds bootstrap prompt text from the character record", () => {
-    const result = buildBootstrapPromptText(character, promptProfile);
+    const result = buildBootstrapPromptText(character, promptProfile, "ponyDiffusionV6XL_v6StartWithThisOne.safetensors");
 
     expect(result.prompt).toContain("Mara Vale");
     expect(result.prompt).toContain("Velvet gloves.");
+    expect(result.prompt).toContain("score_9");
+    expect(result.prompt).toContain("source_anime");
     expect(result.negativePrompt).toContain("underage, explicit sex");
-    expect(result.negativePrompt).toContain("watermark");
+    expect(result.negativePrompt).toContain("source_pony");
   });
 
   it("builds generation prompt text with style and negative tokens", () => {
-    const result = buildGenerationPromptText(character, generationInput);
+    const result = buildGenerationPromptText(character, generationInput, "ponyDiffusionV6XL_v6StartWithThisOne.safetensors");
 
     expect(result.prompt).toContain("satin gloves");
     expect(result.prompt).toContain("editorial pin-up");
+    expect(result.prompt).toContain("rating_explicit");
     expect(result.negativePrompt).toContain("underage");
-    expect(result.negativePrompt).toContain("watermark");
+    expect(result.negativePrompt).toContain("source_furry");
   });
 
   it("builds comfyui requests with optional lora nodes", () => {
@@ -93,6 +97,8 @@ describe("job payload builders", () => {
 
     expect(workflow["4"]?.inputs?.ckpt_name).toBe("pony.safetensors");
     expect(workflow["10"]?.inputs?.lora_name).toBe("mara-vale-v3.safetensors");
+    expect(workflow["11"]?.inputs?.stop_at_clip_layer).toBe(-2);
+    expect(workflow["3"]?.inputs?.sampler_name).toBe("euler_ancestral");
     expect(workflow["5"]?.inputs?.width).toBe(1024);
   });
 

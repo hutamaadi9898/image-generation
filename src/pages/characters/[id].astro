@@ -2,6 +2,7 @@
 import { env } from "cloudflare:workers";
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import StatusPill from "../../components/StatusPill.astro";
+import { PONY_BASE_MODEL_ID } from "../../lib/server/job-payloads";
 import { createRepository } from "../../lib/server/repository";
 import { assetPath, formatTimestamp, titleCase } from "../../lib/ui";
 
@@ -72,7 +73,7 @@ const characterJobs = jobs.filter((job) => job.characterId === characterId);
                   Base model id
                   <input
                     name="baseModelId"
-                    value="stabilityai/stable-diffusion-xl-base-1.0"
+                    value={PONY_BASE_MODEL_ID}
                   />
                 </label>
                 <div class="form-grid">

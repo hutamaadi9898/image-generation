@@ -1,20 +1,27 @@
 import type {
   CharacterRecord,
   GenerationInput,
-  JobRecord,
   LoraVersionRecord,
   PromptProfileRecord
 } from "../domain";
-import { buildBootstrapOutputPrefix } from "./paths";
 
 const DIMENSIONS = {
   "1:1": { width: 1024, height: 1024 },
   "3:4": { width: 1024, height: 1344 },
   "16:9": { width: 1344, height: 768 }
 } as const;
+const PONY_QUALITY_PREFIX = "score_9, score_8_up, score_7_up, score_6_up";
+const PONY_SOURCE_PREFIX = "source_anime, rating_explicit";
+const PONY_NEGATIVE_PREFIX = "score_4, score_5, score_6, source_pony, source_furry, chibi, monochrome, 3d";
+export const PONY_BASE_MODEL_ID = "LyliaEngine/Pony_Diffusion_V6_XL";
+export const PONY_RECOMMENDED_CHECKPOINT = "ponyDiffusionV6XL_v6StartWithThisOne.safetensors";
 
 export function collapsePromptParts(parts: Array<string | null | undefined>): string {
   return parts.map((part) => (part ?? "").trim()).filter(Boolean).join(", ");
+}
+
+export function isPonyModelReference(value: string | null | undefined): boolean {
+  return /pony/i.test(value ?? "");
 }
 
 export function expandSeeds(seeds: number[], targetCount: number): number[] {
@@ -35,8 +42,30 @@ export function dimensionsForAspectRatio(aspectRatio: string | null | undefined)
 
 export function buildBootstrapPromptText(
   character: CharacterRecord,
-  promptProfile: PromptProfileRecord
+  promptProfile: PromptProfileRecord,
+  modelReference?: string
 ): { prompt: string; negativePrompt: string } {
+  if (isPonyModelReference(modelReference)) {
+    return {
+      prompt: collapsePromptParts([
+        PONY_QUALITY_PREFIX,
+        PONY_SOURCE_PREFIX,
+        promptProfile.promptTemplate,
+        character.name,
+        character.tagline,
+        ...character.identityTraits,
+        character.summary,
+        character.outfitNotes,
+        ...promptProfile.styleTokens
+      ]),
+      negativePrompt: collapsePromptParts([
+        promptProfile.negativePrompt,
+        ...character.negativeTokens,
+        PONY_NEGATIVE_PREFIX
+      ])
+    };
+  }
+
   return {
     prompt: collapsePromptParts([
       promptProfile.promptTemplate,
@@ -61,8 +90,25 @@ export function buildBootstrapPromptText(
 
 export function buildGenerationPromptText(
   character: CharacterRecord,
-  input: GenerationInput
+  input: GenerationInput,
+  modelReference?: string
 ): { prompt: string; negativePrompt: string } {
+  if (isPonyModelReference(modelReference)) {
+    return {
+      prompt: collapsePromptParts([
+        PONY_QUALITY_PREFIX,
+        PONY_SOURCE_PREFIX,
+        input.promptTemplate,
+        ...character.styleTokens
+      ]),
+      negativePrompt: collapsePromptParts([
+        input.negativePrompt,
+        ...character.negativeTokens,
+        PONY_NEGATIVE_PREFIX
+      ])
+    };
+  }
+
   return {
     prompt: collapsePromptParts([input.promptTemplate, ...character.styleTokens]),
     negativePrompt: collapsePromptParts([
@@ -95,8 +141,10 @@ export function buildComfyUiRequest({
   filenamePrefix: string;
   loraFilename?: string;
 }): Record<string, unknown> {
+  const usesPonyDefaults = isPonyModelReference(checkpointFilename);
   const modelNodeId = loraFilename ? "10" : "4";
-  const clipNodeId = loraFilename ? "10" : "4";
+  const baseClipNodeId = loraFilename ? "10" : "4";
+  const clipNodeId = usesPonyDefaults ? "11" : baseClipNodeId;
 
   return {
     "3": {
@@ -108,10 +156,10 @@ export function buildComfyUiRequest({
         model: [modelNodeId, 0],
         negative: ["7", 0],
         positive: ["6", 0],
-        sampler_name: "euler",
-        scheduler: "normal",
+        sampler_name: usesPonyDefaults ? "euler_ancestral" : "euler",
+        scheduler: usesPonyDefaults ? "karras" : "normal",
         seed,
-        steps: 28
+        steps: usesPonyDefaults ? 25 : 28
       }
     },
     "4": {
@@ -156,6 +204,17 @@ export function buildComfyUiRequest({
         images: ["8", 0]
       }
     },
+    ...(usesPonyDefaults
+      ? {
+          "11": {
+            class_type: "CLIPSetLastLayer",
+            inputs: {
+              clip: [baseClipNodeId, 1],
+              stop_at_clip_layer: -2
+            }
+          }
+        }
+      : {}),
     ...(loraFilename
       ? {
           "10": {

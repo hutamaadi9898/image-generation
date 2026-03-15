@@ -54,7 +54,11 @@ export const POST: APIRoute = async ({ request }) => {
     const job = await repository.createGenerationJob(character, input);
     internalJobId = job.id;
     const config = requireComfyUiConfig(env);
-    const { prompt, negativePrompt } = buildGenerationPromptText(character, input);
+    const { prompt, negativePrompt } = buildGenerationPromptText(
+      character,
+      input,
+      config.checkpointFilename
+    );
     const { width, height } = dimensionsForAspectRatio(input.aspectRatio);
     const loraFilename = version.artifactR2Key?.split("/").pop() ?? undefined;
     const seeds = expandSeeds(input.seeds, input.imageCount);
