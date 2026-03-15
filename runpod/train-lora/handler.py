@@ -15,6 +15,11 @@ from typing import Any
 import boto3
 import runpod
 
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+os.environ.setdefault("HF_HOME", "/tmp/huggingface")
+os.environ.setdefault("HUGGINGFACE_HUB_CACHE", "/tmp/huggingface/hub")
+os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/huggingface/transformers")
+
 if os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") == "1":
     try:
         import hf_transfer  # noqa: F401
@@ -40,6 +45,9 @@ class TrainingConfig:
 
 
 def load_config() -> TrainingConfig:
+    os.makedirs(os.environ["HF_HOME"], exist_ok=True)
+    os.makedirs(os.environ["HUGGINGFACE_HUB_CACHE"], exist_ok=True)
+    os.makedirs(os.environ["TRANSFORMERS_CACHE"], exist_ok=True)
     return TrainingConfig(
         artifact_bucket=os.environ.get("R2_BUCKET_NAME", ""),
         r2_access_key_id=os.environ.get("R2_ACCESS_KEY_ID", ""),
