@@ -79,11 +79,11 @@ const characterJobs = jobs.filter((job) => job.characterId === characterId);
                 <div class="form-grid">
                   <label>
                     Rank
-                    <input name="rank" type="number" value="16" />
+                    <input name="rank" type="number" value="32" />
                   </label>
                   <label>
                     Steps
-                    <input name="steps" type="number" value="1200" />
+                    <input name="steps" type="number" value="3000" />
                   </label>
                 </div>
                 <label>
@@ -96,6 +96,9 @@ const characterJobs = jobs.filter((job) => job.characterId === characterId);
                 </div>
                 <p class="table-note">
                   After training completes, place the generated LoRA file on the ComfyUI Pod in `models/loras/`.
+                </p>
+                <p class="table-note">
+                  Default Pony starting point here is `rank 32`, `3000` steps, `1e-4` learning rate.
                 </p>
               </form>
             </article>

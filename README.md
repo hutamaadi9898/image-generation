@@ -121,6 +121,15 @@ Training defaults are aligned to the Pony Hugging Face model id:
 LyliaEngine/Pony_Diffusion_V6_XL
 ```
 
+Default LoRA training starting point in this repo:
+
+- rank: `32`
+- steps: `3000`
+- learning rate: `0.0001`
+- resolution: `1024`
+
+This is an inference from current Pony-oriented community practice rather than an official Pony author recommendation. The goal is to avoid the too-small `rank 16 / 1200 steps` baseline that is often weak for character identity retention on Pony-style models.
+
 ## Pod Architecture
 
 This repo now assumes two Pods:
@@ -193,6 +202,14 @@ The app now defaults the character training form to:
 
 ```text
 LyliaEngine/Pony_Diffusion_V6_XL
+```
+
+and:
+
+```text
+rank=32
+steps=3000
+learningRate=0.0001
 ```
 
 Then set the Worker secret:
