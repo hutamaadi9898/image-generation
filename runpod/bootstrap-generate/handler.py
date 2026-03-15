@@ -29,6 +29,7 @@ from PIL import Image
 
 
 DEFAULT_MODEL_ID = "stabilityai/stable-diffusion-xl-base-1.0"
+DEFAULT_LOCAL_MODEL_PATH = "/opt/models/sdxl-base"
 ASPECT_RATIOS: dict[str, tuple[int, int]] = {
     "1:1": (1024, 1024),
     "3:4": (1024, 1344),
@@ -119,6 +120,19 @@ def ensure_storage_config(config: InferenceConfig) -> None:
 
 def collapse_parts(parts: list[str]) -> str:
     return ", ".join(part.strip() for part in parts if part and str(part).strip())
+
+
+def resolve_model_source(model_id: str, fallback_model_id: str) -> str:
+    local_model_path = os.environ.get("LOCAL_SDXL_MODEL_PATH", DEFAULT_LOCAL_MODEL_PATH)
+    if not os.path.exists(local_model_path):
+        return model_id
+
+    normalized = model_id.strip()
+    fallback = fallback_model_id.strip()
+    if normalized in {DEFAULT_MODEL_ID, fallback, local_model_path}:
+        return local_model_path
+
+    return model_id
 
 
 def build_bootstrap_prompt(job_input: dict[str, Any]) -> tuple[str, str]:
@@ -300,7 +314,8 @@ def run_inference(job_input: dict[str, Any], config: InferenceConfig) -> dict[st
 
     width, height = dimensions_for(job_input)
     output_prefix = str(job_input.get("outputPrefix"))
-    model_id = str(job_input.get("baseModelId") or config.default_model_id)
+    requested_model_id = str(job_input.get("baseModelId") or config.default_model_id)
+    model_id = resolve_model_source(requested_model_id, config.default_model_id)
     pipeline = get_pipeline(config, model_id)
     ensure_lora_loaded(client, config, pipeline, lora_key)
 

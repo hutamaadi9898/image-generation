@@ -28,6 +28,8 @@ if os.environ.get("HF_HUB_ENABLE_HF_TRANSFER") == "1":
 
 
 TRAIN_SCRIPT_PATH = "/app/train_dreambooth_lora_sdxl.py"
+DEFAULT_MODEL_ID = "stabilityai/stable-diffusion-xl-base-1.0"
+DEFAULT_LOCAL_MODEL_PATH = "/opt/models/sdxl-base"
 
 
 @dataclass
@@ -116,6 +118,14 @@ def upload_file(client, bucket: str, local_path: str, remote_key: str) -> None:
         )
 
 
+def resolve_model_source(model_id: str) -> str:
+    local_model_path = os.environ.get("LOCAL_SDXL_MODEL_PATH", DEFAULT_LOCAL_MODEL_PATH)
+    normalized = model_id.strip()
+    if os.path.exists(local_model_path) and normalized in {DEFAULT_MODEL_ID, local_model_path}:
+        return local_model_path
+    return model_id
+
+
 def send_callback(
     config: TrainingConfig,
     job_input: dict[str, Any],
@@ -162,11 +172,12 @@ def build_training_command(
     output_dir: str,
 ) -> list[str]:
     hyperparameters = job_input.get("hyperparameters", {}) or {}
+    model_source = resolve_model_source(str(job_input["baseModelId"]))
     return [
         sys.executable,
         config.train_script_path,
         "--pretrained_model_name_or_path",
-        str(job_input["baseModelId"]),
+        model_source,
         "--instance_data_dir",
         dataset_dir,
         "--output_dir",
