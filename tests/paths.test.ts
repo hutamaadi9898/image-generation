@@ -8,7 +8,7 @@ import {
 
 describe("artifact paths", () => {
   it("builds versioned LoRA artifacts", () => {
-    expect(buildLoraArtifactKey("mara-vale", 4)).toBe("mara-vale/v4/lora.safetensors");
+    expect(buildLoraArtifactKey("mara-vale", 4)).toBe("mara-vale/v4/mara-vale-v4.safetensors");
   });
 
   it("builds bootstrap and generation output prefixes", () => {

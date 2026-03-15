@@ -1,10 +1,12 @@
 export interface AppBindings {
   DB?: D1Database;
   ARTIFACTS?: R2Bucket;
-  RUNPOD_API_KEY?: string;
-  RUNPOD_BOOTSTRAP_ENDPOINT_ID?: string;
-  RUNPOD_TRAIN_ENDPOINT_ID?: string;
-  RUNPOD_WEBHOOK_SECRET?: string;
+  COMFYUI_BASE_URL?: string;
+  COMFYUI_BEARER_TOKEN?: string;
+  COMFYUI_CHECKPOINT_FILENAME?: string;
+  TRAIN_POD_BASE_URL?: string;
+  TRAIN_POD_BEARER_TOKEN?: string;
+  JOB_STATUS_POLL_ENABLED?: string;
   RUNPOD_STATUS_POLL_ENABLED?: string;
   APP_BASE_URL?: string;
   GEMINI_API_KEY?: string;
@@ -29,25 +31,38 @@ export function assertArtifacts(env: AppBindings): R2Bucket {
   return env.ARTIFACTS;
 }
 
-export function requireRunPodConfig(env: AppBindings, type: "bootstrap" | "train"): {
-  apiKey: string;
-  endpointId: string;
+export function requireComfyUiConfig(env: AppBindings): {
+  baseUrl: string;
+  bearerToken?: string;
+  checkpointFilename: string;
 } {
-  const endpointId =
-    type === "bootstrap" ? env.RUNPOD_BOOTSTRAP_ENDPOINT_ID : env.RUNPOD_TRAIN_ENDPOINT_ID;
-
-  if (!env.RUNPOD_API_KEY || !endpointId) {
-    throw new Error(`RunPod configuration for ${type} jobs is incomplete.`);
+  if (!env.COMFYUI_BASE_URL || !env.COMFYUI_CHECKPOINT_FILENAME) {
+    throw new Error("ComfyUI Pod configuration is incomplete.");
   }
 
   return {
-    apiKey: env.RUNPOD_API_KEY,
-    endpointId
+    baseUrl: env.COMFYUI_BASE_URL.replace(/\/$/, ""),
+    bearerToken: env.COMFYUI_BEARER_TOKEN,
+    checkpointFilename: env.COMFYUI_CHECKPOINT_FILENAME
+  };
+}
+
+export function requireTrainingPodConfig(env: AppBindings): {
+  baseUrl: string;
+  bearerToken?: string;
+} {
+  if (!env.TRAIN_POD_BASE_URL) {
+    throw new Error("Training Pod configuration is incomplete.");
+  }
+
+  return {
+    baseUrl: env.TRAIN_POD_BASE_URL.replace(/\/$/, ""),
+    bearerToken: env.TRAIN_POD_BEARER_TOKEN
   };
 }
 
 export function isPollingEnabled(env: AppBindings): boolean {
-  return env.RUNPOD_STATUS_POLL_ENABLED !== "false";
+  return env.JOB_STATUS_POLL_ENABLED !== "false" && env.RUNPOD_STATUS_POLL_ENABLED !== "false";
 }
 
 export function requireGeminiConfig(env: AppBindings): { apiKey: string; model: string } {

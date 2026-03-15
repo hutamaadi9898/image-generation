@@ -1,5 +1,5 @@
 export function buildLoraArtifactKey(characterSlug: string, versionNumber: number): string {
-  return `${characterSlug}/v${versionNumber}/lora.safetensors`;
+  return `${characterSlug}/v${versionNumber}/${characterSlug}-v${versionNumber}.safetensors`;
 }
 
 export function buildBootstrapOutputPrefix(characterSlug: string, jobId: string): string {

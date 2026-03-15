@@ -1,11 +1,11 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
-import { requireRunPodConfig } from "../../../../lib/server/config";
+import { requireTrainingPodConfig } from "../../../../lib/server/config";
 import { buildTrainingPayload } from "../../../../lib/server/job-payloads";
 import { badRequest, json } from "../../../../lib/server/http";
 import { createRepository } from "../../../../lib/server/repository";
 import { asInteger, asNumber, asString, readRequestPayload } from "../../../../lib/server/request";
-import { submitRunPodJob } from "../../../../lib/server/runpod";
+import { submitTrainingPodJob } from "../../../../lib/server/train-pod";
 
 export const prerender = false;
 
@@ -43,15 +43,14 @@ export const POST: APIRoute = async ({ params, request }) => {
     const version = await repository.createTrainingVersion(character, input);
     internalJobId = version.jobId;
     loraVersionId = version.id;
-    const config = requireRunPodConfig(env, "train");
-    const submission = await submitRunPodJob({
-      apiKey: config.apiKey,
-      endpointId: config.endpointId,
+    const config = requireTrainingPodConfig(env);
+    const submission = await submitTrainingPodJob({
+      baseUrl: config.baseUrl,
+      bearerToken: config.bearerToken,
       input: buildTrainingPayload({
         character,
         version,
         approvedKeys: approvedReferences.map((item) => item.r2Key),
-        webhookSecret: env.RUNPOD_WEBHOOK_SECRET,
         hyperparameters: {
           rank: input.rank,
           learningRate: input.learningRate,
@@ -60,7 +59,7 @@ export const POST: APIRoute = async ({ params, request }) => {
       })
     });
 
-    await repository.updateJobSubmission(version.jobId, config.endpointId, submission.id);
+    await repository.updateJobSubmission(version.jobId, config.baseUrl, submission.id);
     return json({ ok: true, jobId: version.jobId, loraVersionId: version.id, runpodJobId: submission.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Training submission failed.";

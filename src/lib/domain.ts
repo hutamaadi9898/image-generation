@@ -179,7 +179,7 @@ export interface CompletionImage {
 export interface JobCompletionPayload {
   jobId: string;
   type: JobType;
-  status: "COMPLETED" | "FAILED" | "IN_PROGRESS" | "IN_QUEUE" | "CANCELLED";
+  status: "COMPLETED" | "FAILED" | "RUNNING" | "QUEUED" | "IN_PROGRESS" | "IN_QUEUE" | "CANCELLED";
   output?: {
     images?: CompletionImage[];
     artifactR2Key?: string;

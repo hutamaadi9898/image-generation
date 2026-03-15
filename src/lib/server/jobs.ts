@@ -1,8 +1,16 @@
 import type { JobCompletionPayload } from "../domain";
-import { isPollingEnabled, requireRunPodConfig, type AppBindings } from "./config";
+import { assertArtifacts, isPollingEnabled, requireComfyUiConfig, requireTrainingPodConfig, type AppBindings } from "./config";
 import { mapProviderStatusToJobStatus } from "./job-state";
-import { buildWebhookPayload, getRunPodStatus } from "./runpod";
+import {
+  buildComfyUiProxyReference,
+  fetchComfyUiImage,
+  getComfyUiHistory,
+  getComfyUiPromptError,
+  isComfyUiPromptCompleted,
+  parseProviderJobIds
+} from "./comfyui";
 import { AppRepository } from "./repository";
+import { getTrainingPodStatus } from "./train-pod";
 
 export async function syncJobStatus(
   env: AppBindings,
@@ -18,25 +26,128 @@ export async function syncJobStatus(
     return { changed: false };
   }
 
-  const config = requireRunPodConfig(env, job.type === "train_lora" ? "train" : "bootstrap");
-  const status = await getRunPodStatus({
-    apiKey: config.apiKey,
-    endpointId: job.runpodEndpointId || config.endpointId,
-    jobId: job.runpodJobId
-  });
-  const internalStatus = mapProviderStatusToJobStatus(status.status);
-  const priorStatus = job.status;
+  if (job.type === "train_lora") {
+    const config = requireTrainingPodConfig(env);
+    const status = await getTrainingPodStatus({
+      baseUrl: config.baseUrl,
+      bearerToken: config.bearerToken,
+      jobId: job.runpodJobId
+    });
+    const internalStatus = mapProviderStatusToJobStatus(status.status);
+    const priorStatus = job.status;
 
-  if (status.status === "COMPLETED" || status.status === "FAILED" || status.status === "CANCELLED") {
-    const payload = buildWebhookPayload(job.type, job.id, status);
-    const dedupeKey = `${job.runpodJobId}:${status.status}:poll`;
+    if (status.status === "COMPLETED" || status.status === "FAILED") {
+      const payload = {
+        jobId: job.id,
+        type: job.type,
+        status: status.status,
+        output: status.output,
+        error: status.error
+      } satisfies JobCompletionPayload;
+      const dedupeKey = `${job.runpodJobId}:${status.status}:poll`;
+      const inserted = await repository.recordJobEvent(job.id, "poller", "status-sync", dedupeKey, payload);
+      if (inserted) {
+        await repository.applyCompletion(job, payload);
+        return { changed: true };
+      }
+    } else if (internalStatus !== priorStatus) {
+      await repository.applyJobState(job.id, internalStatus);
+      return { changed: true };
+    }
+
+    return { changed: false };
+  }
+
+  const config = requireComfyUiConfig(env);
+  const promptIds = parseProviderJobIds(job.runpodJobId);
+  if (!promptIds.length) {
+    return { changed: false };
+  }
+
+  const histories = await Promise.all(
+    promptIds.map((promptId) =>
+      getComfyUiHistory({
+        baseUrl: config.baseUrl,
+        bearerToken: config.bearerToken,
+        promptId
+      }).then((entry) => ({ promptId, entry }))
+    )
+  );
+
+  const errorEntry = histories.find(({ entry }) => getComfyUiPromptError(entry));
+  if (errorEntry) {
+    const payload = {
+      jobId: job.id,
+      type: job.type,
+      status: "FAILED",
+      error: getComfyUiPromptError(errorEntry.entry) ?? "ComfyUI prompt failed."
+    } satisfies JobCompletionPayload;
+    const dedupeKey = `${job.runpodJobId}:FAILED:poll`;
     const inserted = await repository.recordJobEvent(job.id, "poller", "status-sync", dedupeKey, payload);
     if (inserted) {
       await repository.applyCompletion(job, payload);
       return { changed: true };
     }
-  } else if (internalStatus !== priorStatus) {
-    await repository.applyJobState(job.id, internalStatus);
+    return { changed: false };
+  }
+
+  const completed = histories.every(({ entry }) => isComfyUiPromptCompleted(entry));
+  if (!completed) {
+    if (job.status !== "running") {
+      await repository.applyJobState(job.id, "running");
+      return { changed: true };
+    }
+    return { changed: false };
+  }
+
+  const bucket = assertArtifacts(env);
+  const seeds =
+    job.type === "bootstrap"
+      ? Array.from({ length: job.imageCount ?? promptIds.length }, (_, index) => {
+          const base = job.seedValues[index % job.seedValues.length] ?? 0;
+          const offset = Math.floor(index / Math.max(job.seedValues.length, 1)) * 100_003;
+          return base + offset;
+        })
+      : job.seedValues.slice(0, job.imageCount ?? promptIds.length);
+
+  const images = [];
+  for (const [index, history] of histories.entries()) {
+    const outputs = Object.values(history.entry?.outputs ?? {});
+    const imageMeta = outputs.flatMap((output) => output.images ?? [])[0];
+    if (!imageMeta) {
+      continue;
+    }
+
+    const bytes = await fetchComfyUiImage({
+      baseUrl: config.baseUrl,
+      bearerToken: config.bearerToken,
+      image: imageMeta
+    });
+    const seed = seeds[index] ?? index;
+    const r2Key = `${job.outputPrefix}/seed-${seed}.png`;
+    await bucket.put(r2Key, bytes, {
+      httpMetadata: {
+        contentType: "image/png"
+      }
+    });
+    images.push({
+      r2Key,
+      seed,
+      promptSnapshot: job.promptTemplate ?? job.outputPrefix
+    });
+  }
+
+  const payload = {
+    jobId: job.id,
+    type: job.type,
+    status: "COMPLETED",
+    output: { images },
+    providerEventId: buildComfyUiProxyReference(env)
+  } satisfies JobCompletionPayload;
+  const dedupeKey = `${job.runpodJobId}:COMPLETED:poll`;
+  const inserted = await repository.recordJobEvent(job.id, "poller", "status-sync", dedupeKey, payload);
+  if (inserted) {
+    await repository.applyCompletion(job, payload);
     return { changed: true };
   }
 

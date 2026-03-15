@@ -28,6 +28,7 @@
 	],
 	"vars": {
 		"APP_BASE_URL": "https://image-generator.hutama39.workers.dev",
+		"JOB_STATUS_POLL_ENABLED": "true",
 		"RUNPOD_STATUS_POLL_ENABLED": "true",
 		"GEMINI_MODEL": "gemini-3-flash-preview"
 	},

@@ -1,11 +1,16 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
-import { requireRunPodConfig } from "../../../../lib/server/config";
-import { buildBootstrapPayload } from "../../../../lib/server/job-payloads";
+import { requireComfyUiConfig } from "../../../../lib/server/config";
+import {
+  buildBootstrapPromptText,
+  buildComfyUiRequest,
+  dimensionsForAspectRatio,
+  expandSeeds
+} from "../../../../lib/server/job-payloads";
+import { serializeProviderJobIds, submitComfyUiPrompt } from "../../../../lib/server/comfyui";
 import { badRequest, json } from "../../../../lib/server/http";
 import { createRepository } from "../../../../lib/server/repository";
 import { asInteger, asSeeds, readRequestPayload } from "../../../../lib/server/request";
-import { submitRunPodJob } from "../../../../lib/server/runpod";
 
 export const prerender = false;
 
@@ -33,22 +38,31 @@ export const POST: APIRoute = async ({ params, request }) => {
   try {
     const job = await repository.createBootstrapJob(character, targetCount, seeds);
     internalJobId = job.id;
-    const config = requireRunPodConfig(env, "bootstrap");
-    const submission = await submitRunPodJob({
-      apiKey: config.apiKey,
-      endpointId: config.endpointId,
-      input: buildBootstrapPayload({
-        character,
-        promptProfile,
-        job,
-        targetCount,
-        seeds,
-        webhookSecret: env.RUNPOD_WEBHOOK_SECRET
-      })
-    });
+    const config = requireComfyUiConfig(env);
+    const { prompt, negativePrompt } = buildBootstrapPromptText(character, promptProfile);
+    const expandedSeeds = expandSeeds(seeds, targetCount);
+    const { width, height } = dimensionsForAspectRatio("3:4");
 
-    await repository.updateJobSubmission(job.id, config.endpointId, submission.id);
-    return json({ ok: true, jobId: job.id, runpodJobId: submission.id });
+    const promptIds: string[] = [];
+    for (const seed of expandedSeeds) {
+      const submission = await submitComfyUiPrompt({
+        baseUrl: config.baseUrl,
+        bearerToken: config.bearerToken,
+        prompt: buildComfyUiRequest({
+          checkpointFilename: config.checkpointFilename,
+          positivePrompt: prompt,
+          negativePrompt,
+          seed,
+          width,
+          height,
+          filenamePrefix: `${character.slug}_${job.id}_${seed}`
+        })
+      });
+      promptIds.push(submission.prompt_id);
+    }
+
+    await repository.updateJobSubmission(job.id, config.baseUrl, serializeProviderJobIds(promptIds));
+    return json({ ok: true, jobId: job.id, runpodJobId: serializeProviderJobIds(promptIds) });
   } catch (error) {
     if (internalJobId) {
       await repository.applyJobState(

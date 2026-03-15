@@ -4,86 +4,67 @@ Private Astro + Cloudflare control plane for:
 
 - creating original adult-only character profiles
 - curating reference images
-- training SDXL LoRA versions on RunPod Serverless
-- generating final images with stored prompt presets
+- training SDXL LoRA versions on a dedicated training Pod
+- generating final images through a ComfyUI Pod
 
-The app now also supports Gemini-assisted prompt drafting from the Characters page.
+The app also supports Gemini-assisted prompt drafting from the Characters page.
 
 ## Stack
 
 - Astro SSR on Cloudflare Workers
 - Cloudflare D1 for metadata and job state
 - Cloudflare R2 for datasets, generations, and LoRA artifacts
-- RunPod Serverless for GPU inference and LoRA training
+- RunPod Pod with ComfyUI for bootstrap generation and final inference
+- RunPod Pod with a small training API for LoRA jobs
 - Gemini for drafting character prompt packs
 
-## What Is In This Repo
+## Repo Layout
 
-- Web app and API routes under [src](/home/hutamaadi/Desktop/coding/image-generator/src)
-- D1 schema in [migrations/0001_initial.sql](/home/hutamaadi/Desktop/coding/image-generator/migrations/0001_initial.sql)
-- RunPod inference worker in [runpod/bootstrap-generate](/home/hutamaadi/Desktop/coding/image-generator/runpod/bootstrap-generate)
-- RunPod training worker in [runpod/train-lora](/home/hutamaadi/Desktop/coding/image-generator/runpod/train-lora)
-
-## Quick Start
-
-1. Install dependencies.
-```bash
-pnpm install
-```
-
-2. Run tests.
-```bash
-pnpm test
-```
-
-3. Build the app.
-```bash
-pnpm build
-```
-
-4. Deploy the Cloudflare Worker.
-```bash
-pnpm run deploy
-```
+- App and API routes: [src](/home/hutamaadi/Desktop/coding/image-generator/src)
+- D1 schema: [migrations/0001_initial.sql](/home/hutamaadi/Desktop/coding/image-generator/migrations/0001_initial.sql)
+- Training Pod service: [pods/train-service](/home/hutamaadi/Desktop/coding/image-generator/pods/train-service)
+- Legacy serverless workers: [runpod](/home/hutamaadi/Desktop/coding/image-generator/runpod)
 
 ## Cloudflare Setup
 
-This repo expects these Cloudflare resources:
+Required bindings:
 
-- one D1 database bound as `DB`
-- one R2 bucket bound as `ARTIFACTS`
-- one KV namespace bound as `SESSION`
+- `DB` -> D1
+- `ARTIFACTS` -> R2
+- `SESSION` -> KV
 
-This project is already configured in [wrangler.jsonc](/home/hutamaadi/Desktop/coding/image-generator/wrangler.jsonc) for:
+This repo is already configured in [wrangler.jsonc](/home/hutamaadi/Desktop/coding/image-generator/wrangler.jsonc) for:
 
 - `DB` -> `image-generator-db`
 - `ARTIFACTS` -> `image-generator-artifacts`
 - `APP_BASE_URL` -> `https://image-generator.hutama39.workers.dev`
+- `JOB_STATUS_POLL_ENABLED` -> `true`
 - `GEMINI_MODEL` -> `gemini-3-flash-preview`
 
-Apply the database migration:
+Apply the migration:
 
 ```bash
 npx wrangler d1 migrations apply image-generator-db --remote
 ```
 
-Generate Worker types any time you change `wrangler.jsonc`:
+Regenerate Worker types after config changes:
 
 ```bash
 pnpm generate-types
 ```
 
-## Secrets You Need In Cloudflare
+## Cloudflare Secrets
 
 Set these Worker secrets:
 
 - `ADMIN_USERNAME`
 - `ADMIN_PASSWORD`
 - `GEMINI_API_KEY`
-- `RUNPOD_API_KEY`
-- `RUNPOD_BOOTSTRAP_ENDPOINT_ID`
-- `RUNPOD_TRAIN_ENDPOINT_ID`
-- `RUNPOD_WEBHOOK_SECRET`
+- `COMFYUI_BASE_URL`
+- `COMFYUI_BEARER_TOKEN` optional
+- `COMFYUI_CHECKPOINT_FILENAME`
+- `TRAIN_POD_BASE_URL`
+- `TRAIN_POD_BEARER_TOKEN` optional
 
 Commands:
 
@@ -91,254 +72,225 @@ Commands:
 printf '%s' 'your-admin-user' | npx wrangler secret put ADMIN_USERNAME
 printf '%s' 'your-admin-password' | npx wrangler secret put ADMIN_PASSWORD
 printf '%s' 'your-gemini-key' | npx wrangler secret put GEMINI_API_KEY
-printf '%s' 'your-runpod-api-key' | npx wrangler secret put RUNPOD_API_KEY
-printf '%s' 'bootstrap-endpoint-id' | npx wrangler secret put RUNPOD_BOOTSTRAP_ENDPOINT_ID
-printf '%s' 'train-endpoint-id' | npx wrangler secret put RUNPOD_TRAIN_ENDPOINT_ID
-printf '%s' 'shared-webhook-secret' | npx wrangler secret put RUNPOD_WEBHOOK_SECRET
+printf '%s' 'https://your-comfyui-pod-url' | npx wrangler secret put COMFYUI_BASE_URL
+printf '%s' 'your-comfyui-token' | npx wrangler secret put COMFYUI_BEARER_TOKEN
+printf '%s' 'your-checkpoint-filename.safetensors' | npx wrangler secret put COMFYUI_CHECKPOINT_FILENAME
+printf '%s' 'https://your-train-pod-url' | npx wrangler secret put TRAIN_POD_BASE_URL
+printf '%s' 'your-train-pod-token' | npx wrangler secret put TRAIN_POD_BEARER_TOKEN
 ```
 
-## Gemini Prompt Drafting
+## Recommended ComfyUI Checkpoint
 
-The Characters page can call Gemini to draft:
+Recommended starting checkpoint for anime-heavy NSFW styling:
 
-- tagline
-- summary
-- identity traits
-- style tokens
-- negative tokens
-- prompt template
-- negative prompt
+- `Pony Diffusion V6 XL` from Civitai
 
-It uses:
+This is an inference based on its continuing popularity in the anime/NSFW ComfyUI ecosystem, not a permanent truth. The app does not hardcode a filename. You must:
 
-- model: `gemini-3-flash-preview`
-- secret: `GEMINI_API_KEY`
-- API route: `POST /api/characters/prompt`
+1. Download the checkpoint you want from Civitai onto the ComfyUI Pod.
+2. Put it in `ComfyUI/models/checkpoints/`.
+3. Set `COMFYUI_CHECKPOINT_FILENAME` to the exact filename on disk.
 
-Gemini output is validated against the same adult-only content policy used by the rest of the app.
-
-## RunPod End-To-End Setup
-
-This is the part that usually trips people up the first time. Follow it in this order.
-
-### 1. Build And Push The Worker Images
-
-You need two container images:
-
-- `bootstrap-generate` for reference generation and final inference
-- `train-lora` for LoRA training
-
-Example with Docker Hub:
-
-```bash
-docker build -t your-dockerhub-user/character-forge-bootstrap:latest ./runpod/bootstrap-generate
-docker build -t your-dockerhub-user/character-forge-train:latest ./runpod/train-lora
-
-docker push your-dockerhub-user/character-forge-bootstrap:latest
-docker push your-dockerhub-user/character-forge-train:latest
-```
-
-### 2. Create R2 S3 Credentials
-
-Your RunPod workers do not talk to Cloudflare through Wrangler bindings. They need R2 S3 credentials.
-
-Create:
-
-- an R2 API token with read/write access to the artifacts bucket
-- the S3 endpoint for your account
-
-You will need these values in RunPod:
-
-- `R2_BUCKET_NAME`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_ENDPOINT_URL`
-
-Typical endpoint format:
+Example:
 
 ```text
-https://<your-account-id>.r2.cloudflarestorage.com
+COMFYUI_CHECKPOINT_FILENAME=ponyDiffusionV6XL_v6StartWithThisOne.safetensors
 ```
 
-### 3. Create The Bootstrap Endpoint In RunPod
+If you use a different checkpoint, only the filename secret needs to change.
 
-In the RunPod dashboard:
+## Pod Architecture
 
-1. Create a Serverless endpoint.
-2. Choose `Import Git Repository`.
-3. Select `hutamaadi9898/image-generation`.
-4. Use branch `main`.
-5. Set Dockerfile Path to `runpod/bootstrap-generate/Dockerfile`.
-3. Give it enough GPU for SDXL inference.
-4. Set these environment variables on the endpoint:
+This repo now assumes two Pods:
 
-- `R2_BUCKET_NAME`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_ENDPOINT_URL`
-- `APP_WEBHOOK_URL`
-- `APP_WEBHOOK_SECRET`
-- `HF_TOKEN` optional
-- `SDXL_BASE_MODEL` optional
+1. ComfyUI Pod
+Used for:
+- bootstrap reference image generation
+- final image generation
 
-Recommended values:
+Cloudflare queues prompts to ComfyUI with:
+- `POST /prompt`
+- polling `GET /history/{prompt_id}`
+- downloading images from `GET /view`
 
-- `APP_WEBHOOK_URL=https://image-generator.hutama39.workers.dev/api/runpod/webhook`
-- `APP_WEBHOOK_SECRET=<same value as RUNPOD_WEBHOOK_SECRET in Cloudflare>`
-- `SDXL_BASE_MODEL=stabilityai/stable-diffusion-xl-base-1.0`
+Cloudflare then stores the finished images in R2 and updates D1 job state.
 
-Copy the RunPod endpoint ID. Put it into Cloudflare as `RUNPOD_BOOTSTRAP_ENDPOINT_ID`.
+2. Training Pod
+Used for:
+- LoRA training jobs
 
-### 4. Create The Train Endpoint In RunPod
+Cloudflare talks to the small API defined in [pods/train-service/server.py](/home/hutamaadi/Desktop/coding/image-generator/pods/train-service/server.py):
 
-Create a second Serverless endpoint from the same GitHub repo:
+- `POST /jobs`
+- `GET /jobs/{id}`
 
-1. Choose `Import Git Repository`.
-2. Select `hutamaadi9898/image-generation`.
-3. Use branch `main`.
-4. Set Dockerfile Path to `runpod/train-lora/Dockerfile`.
+The training Pod downloads approved dataset images from R2, runs DreamBooth LoRA training, uploads the final `.safetensors` artifact back to R2, and Cloudflare polls for completion.
 
-Set these environment variables:
+## ComfyUI Pod Setup
 
-- `R2_BUCKET_NAME`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_ENDPOINT_URL`
-- `APP_WEBHOOK_URL`
-- `APP_WEBHOOK_SECRET`
-- `HF_TOKEN` optional
-- `TRAIN_RESOLUTION` optional
+Create a RunPod Pod using a ComfyUI template or your own ComfyUI image.
 
-Recommended values:
+Requirements:
 
-- `APP_WEBHOOK_URL=https://image-generator.hutama39.workers.dev/api/runpod/webhook`
-- `APP_WEBHOOK_SECRET=<same value as RUNPOD_WEBHOOK_SECRET in Cloudflare>`
-- `TRAIN_RESOLUTION=1024`
+- ComfyUI reachable over HTTP
+- the ComfyUI API exposed
+- your chosen checkpoint placed in `models/checkpoints/`
+- generated LoRAs placed in `models/loras/`
 
-Copy the endpoint ID. Put it into Cloudflare as `RUNPOD_TRAIN_ENDPOINT_ID`.
+Set these Pod-side env vars only if you protect the Pod with a bearer token:
 
-### 5. Add Your RunPod API Key To Cloudflare
+- `COMFYUI_BEARER_TOKEN`
 
-Create a RunPod API key in the RunPod dashboard and store it in Cloudflare:
+Then set the Worker secrets:
+
+- `COMFYUI_BASE_URL=https://<your-comfyui-pod-host>`
+- `COMFYUI_CHECKPOINT_FILENAME=<exact checkpoint filename>`
+
+## Training Pod Setup
+
+Build the training API image from this repo:
 
 ```bash
-printf '%s' 'your-runpod-api-key' | npx wrangler secret put RUNPOD_API_KEY
+docker build -t your-user/character-forge-train-pod:latest ./pods/train-service
+docker push your-user/character-forge-train-pod:latest
 ```
 
-### 6. Redeploy The App
+Run a Pod from that image and expose port `8000`.
 
-After adding the new secrets:
+Set these env vars on the training Pod:
+
+- `R2_BUCKET_NAME=image-generator-artifacts`
+- `R2_ACCESS_KEY_ID=<cloudflare-r2-access-key-id>`
+- `R2_SECRET_ACCESS_KEY=<cloudflare-r2-secret-access-key>`
+- `R2_ENDPOINT_URL=https://<your-account-id>.r2.cloudflarestorage.com`
+- `TRAIN_POD_BEARER_TOKEN=<optional shared bearer token>`
+- `HF_TOKEN=<optional if your base model requires auth>`
+- `TRAIN_RESOLUTION=1024`
+
+Then set the Worker secret:
+
+```bash
+printf '%s' 'https://your-training-pod-url' | npx wrangler secret put TRAIN_POD_BASE_URL
+```
+
+If you use bearer auth:
+
+```bash
+printf '%s' 'your-train-pod-token' | npx wrangler secret put TRAIN_POD_BEARER_TOKEN
+```
+
+## Important LoRA Sync Step
+
+ComfyUI can load a LoRA only if the `.safetensors` file exists locally in `models/loras/`.
+
+This repo does not yet auto-copy the trained LoRA from R2 into the ComfyUI Pod.
+
+Current workflow:
+
+1. Train a version from the character page.
+2. Wait for the training job to finish and upload the artifact to R2.
+3. Copy that `.safetensors` file into the ComfyUI Pod `models/loras/` directory using the same filename.
+4. Open `/generate` and choose that ready version.
+
+The app expects the LoRA filename on the ComfyUI Pod to match the basename of the stored R2 key.
+
+Example artifact key:
+
+```text
+mara-vale/v3/mara-vale-v3.safetensors
+```
+
+Expected ComfyUI filename:
+
+```text
+mara-vale-v3.safetensors
+```
+
+## End-To-End Flow
+
+1. Create or edit a character on `/characters`
+2. Use Gemini prompt drafting if needed
+3. Open the character page and launch bootstrap generation
+4. Review references and approve at least 20 images
+5. Launch training from the character page
+6. Wait for the training Pod to finish and upload the LoRA to R2
+7. Copy the LoRA file into the ComfyUI Pod `models/loras/`
+8. Open `/generate`
+9. Choose the ready version and queue generation
+10. Cloudflare polls ComfyUI history and writes final images to R2
+
+## Local Commands
+
+Install:
+
+```bash
+pnpm install
+```
+
+Run tests:
+
+```bash
+pnpm test
+```
+
+Build:
+
+```bash
+pnpm build
+```
+
+Deploy:
 
 ```bash
 pnpm run deploy
 ```
 
-### 7. Test The Full Chain
+## Troubleshooting
 
-Use this order:
+### ComfyUI Pod is reachable but generation never completes
 
-1. Open `/characters`
-2. Create a character
-3. Use the Gemini button to draft the prompt fields
-4. Save the character
-5. Open the character page and start bootstrap generation
-6. Approve enough references
-7. Start training
-8. Wait for the webhook to mark the LoRA version as ready
-9. Open `/generate` and queue a generation job
-10. Open `/gallery` to review outputs
+Check:
 
-## How Data Flows
+- `COMFYUI_BASE_URL`
+- the Pod HTTP service is exposed
+- the checkpoint filename matches exactly
+- the LoRA filename exists in `models/loras/`
 
-### Bootstrap / Generate Worker
+### Training completes but generation fails on missing LoRA
 
-The bootstrap worker handles two job types:
+The Worker only knows the artifact key in R2. ComfyUI still needs the same file on local disk.
 
-- `bootstrap`
-- `generate`
+Copy the file into:
 
-It should:
-
-1. receive a RunPod job
-2. generate images
-3. upload them to R2
-4. call the Cloudflare webhook
-
-### Train Worker
-
-The train worker should:
-
-1. download approved training images from R2
-2. train the SDXL LoRA
-3. upload `lora.safetensors` and metadata back to R2
-4. report completion back to the webhook
-
-## Important Shared Values
-
-These must line up between Cloudflare and RunPod:
-
-- `APP_WEBHOOK_URL`
-- `APP_WEBHOOK_SECRET`
-- R2 bucket name
-- R2 S3 credentials
-- RunPod endpoint IDs
-
-If one side uses a different secret or wrong endpoint ID, jobs will submit but never complete correctly.
-
-## Common Problems
+```text
+ComfyUI/models/loras/
+```
 
 ### Prompt generation says Gemini is not configured
 
 Set:
 
-```bash
-printf '%s' 'your-gemini-key' | npx wrangler secret put GEMINI_API_KEY
-pnpm run deploy
-```
+- `GEMINI_API_KEY`
 
-### Bootstrap or training fails immediately
-
-Usually one of these is wrong:
-
-- `RUNPOD_API_KEY`
-- `RUNPOD_BOOTSTRAP_ENDPOINT_ID`
-- `RUNPOD_TRAIN_ENDPOINT_ID`
-- RunPod endpoint image
-- RunPod endpoint env vars
-
-### RunPod job starts but Cloudflare never marks it complete
+### Jobs stay queued or running forever
 
 Check:
 
-- `APP_WEBHOOK_URL`
-- `APP_WEBHOOK_SECRET`
-- Cloudflare deploy URL
-- RunPod worker logs
+- `JOB_STATUS_POLL_ENABLED`
+- ComfyUI Pod `/history/{prompt_id}` responds
+- Training Pod `/jobs/{id}` responds
 
-### RunPod worker cannot access R2
+## Current Limitations
 
-Check:
+- LoRA sync from R2 into the ComfyUI Pod is still manual.
+- The legacy `runpod/` serverless workers remain in the repo but are no longer the recommended path.
+- The app keeps the historical `runpodEndpointId` and `runpodJobId` database columns to avoid a migration, even though Pod URLs and Pod job ids are now used there.
 
-- `R2_ENDPOINT_URL`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
-
-## Useful Commands
-
-```bash
-pnpm test
-pnpm build
-pnpm run deploy
-npx wrangler tail image-generator
-npx wrangler secret list --name image-generator
-npx wrangler d1 migrations apply image-generator-db --remote
-```
-
-## Official References
+## References
 
 - Gemini text generation: https://ai.google.dev/gemini-api/docs/text-generation
-- RunPod custom workers: https://docs.runpod.io/serverless/workers/custom-worker
-- RunPod job operations: https://docs.runpod.io/serverless/endpoints/job-operations
-- RunPod webhooks: https://docs.runpod.io/serverless/endpoints/webhooks
-- Cloudflare R2 S3 API: https://developers.cloudflare.com/r2/api/s3/api/
+- RunPod Pod overview: https://docs.runpod.io/pods/overview
+- RunPod Pod pricing: https://docs.runpod.io/pods/pricing
+- RunPod ComfyUI on Pods: https://docs.runpod.io/tutorials/serverless/comfyui
+- ComfyUI API example: https://github.com/comfyanonymous/ComfyUI/blob/master/script_examples/basic_api_example.py
+- ComfyUI websocket/history example: https://github.com/comfyanonymous/ComfyUI/blob/master/script_examples/websockets_api_example.py

@@ -30,14 +30,14 @@ const approvedCounts = references.reduce<Record<string, number>>((acc, reference
         <p class="eyebrow">Training</p>
         <h2>Version each LoRA artifact deliberately, with traceable datasets and job history.</h2>
         <p class="lede">
-          Every train request writes a version row before it dispatches to RunPod, so artifact paths,
-          retries, and webhook completion stay deterministic.
+          Every train request writes a version row before it dispatches to the training Pod API, so
+          artifact paths and retries stay deterministic.
         </p>
       </div>
       <article class="panel">
         <p class="eyebrow">Readiness</p>
         <h3>{characters.filter((item) => (approvedCounts[item.id] ?? 0) >= 20).length} characters meet the 20-image gate</h3>
-        <p class="support-text">Use each character page to launch training with versioned output paths.</p>
+        <p class="support-text">Use each character page to launch training, then copy the resulting LoRA into ComfyUI.</p>
       </article>
     </section>
 

@@ -1,12 +1,17 @@
 import type { APIRoute } from "astro";
 import { env } from "cloudflare:workers";
-import { requireRunPodConfig } from "../../lib/server/config";
+import { requireComfyUiConfig } from "../../lib/server/config";
 import { validateGenerationInput } from "../../lib/server/content-policy";
-import { buildGenerationPayload } from "../../lib/server/job-payloads";
+import {
+  buildComfyUiRequest,
+  buildGenerationPromptText,
+  dimensionsForAspectRatio,
+  expandSeeds
+} from "../../lib/server/job-payloads";
+import { serializeProviderJobIds, submitComfyUiPrompt } from "../../lib/server/comfyui";
 import { badRequest, json } from "../../lib/server/http";
 import { createRepository } from "../../lib/server/repository";
 import { asInteger, asSeeds, asString, readRequestPayload } from "../../lib/server/request";
-import { submitRunPodJob } from "../../lib/server/runpod";
 
 export const prerender = false;
 
@@ -48,21 +53,33 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const job = await repository.createGenerationJob(character, input);
     internalJobId = job.id;
-    const config = requireRunPodConfig(env, "bootstrap");
-    const submission = await submitRunPodJob({
-      apiKey: config.apiKey,
-      endpointId: config.endpointId,
-      input: buildGenerationPayload({
-        character,
-        version,
-        input,
-        job,
-        webhookSecret: env.RUNPOD_WEBHOOK_SECRET
-      })
-    });
+    const config = requireComfyUiConfig(env);
+    const { prompt, negativePrompt } = buildGenerationPromptText(character, input);
+    const { width, height } = dimensionsForAspectRatio(input.aspectRatio);
+    const loraFilename = version.artifactR2Key?.split("/").pop() ?? undefined;
+    const seeds = expandSeeds(input.seeds, input.imageCount);
 
-    await repository.updateJobSubmission(job.id, config.endpointId, submission.id);
-    return json({ ok: true, jobId: job.id, runpodJobId: submission.id });
+    const promptIds: string[] = [];
+    for (const seed of seeds) {
+      const submission = await submitComfyUiPrompt({
+        baseUrl: config.baseUrl,
+        bearerToken: config.bearerToken,
+        prompt: buildComfyUiRequest({
+          checkpointFilename: config.checkpointFilename,
+          positivePrompt: prompt,
+          negativePrompt,
+          seed,
+          width,
+          height,
+          filenamePrefix: `${character.slug}_${job.id}_${seed}`,
+          loraFilename
+        })
+      });
+      promptIds.push(submission.prompt_id);
+    }
+
+    await repository.updateJobSubmission(job.id, config.baseUrl, serializeProviderJobIds(promptIds));
+    return json({ ok: true, jobId: job.id, runpodJobId: serializeProviderJobIds(promptIds) });
   } catch (error) {
     if (internalJobId) {
       await repository.applyJobState(

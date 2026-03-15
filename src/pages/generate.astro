@@ -29,7 +29,7 @@ const characterNameById = new Map(characters.map((character) => [character.id, c
         <p class="eyebrow">Generate</p>
         <h2>Apply a stable prompt preset to a ready LoRA, then iterate across seeds without losing identity cues.</h2>
         <p class="lede">
-          The generation API reuses the inference worker, stores output metadata in D1, and writes
+          The generation API queues prompts on a ComfyUI Pod, polls ComfyUI history, and writes
           final images into R2 under a job-scoped prefix.
         </p>
       </div>
@@ -71,6 +71,9 @@ const characterNameById = new Map(characters.map((character) => [character.id, c
             Prompt template
             <textarea id="prompt-template" name="promptTemplate" required></textarea>
           </label>
+          <p class="table-note">
+            The selected LoRA file must also exist on the ComfyUI Pod under `models/loras/` with the same filename.
+          </p>
           <label>
             Negative prompt
             <textarea id="negative-prompt" name="negativePrompt" required></textarea>

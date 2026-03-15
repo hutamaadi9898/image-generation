@@ -4,8 +4,10 @@ export function mapProviderStatusToJobStatus(
   status: JobCompletionPayload["status"]
 ): JobStatus {
   switch (status) {
+    case "QUEUED":
     case "IN_QUEUE":
       return "queued";
+    case "RUNNING":
     case "IN_PROGRESS":
       return "running";
     case "COMPLETED":

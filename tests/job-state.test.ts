@@ -3,6 +3,8 @@ import { buildWebhookDedupeKey, isTrainingReady, mapProviderStatusToJobStatus } 
 
 describe("job state helpers", () => {
   it("maps provider states to internal job states", () => {
+    expect(mapProviderStatusToJobStatus("QUEUED")).toBe("queued");
+    expect(mapProviderStatusToJobStatus("RUNNING")).toBe("running");
     expect(mapProviderStatusToJobStatus("IN_QUEUE")).toBe("queued");
     expect(mapProviderStatusToJobStatus("IN_PROGRESS")).toBe("running");
     expect(mapProviderStatusToJobStatus("COMPLETED")).toBe("succeeded");

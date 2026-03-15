@@ -93,6 +93,9 @@ const characterJobs = jobs.filter((job) => job.characterId === characterId);
                   <button type="submit" class="secondary">Queue training</button>
                   <p class="form-status" data-form-status></p>
                 </div>
+                <p class="table-note">
+                  After training completes, place the generated LoRA file on the ComfyUI Pod in `models/loras/`.
+                </p>
               </form>
             </article>
           </div>
