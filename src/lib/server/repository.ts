@@ -119,8 +119,8 @@ function mapJob(row: Record<string, unknown>): JobRecord {
     loraVersionId: row.lora_version_id ? String(row.lora_version_id) : null,
     type: String(row.job_type) as JobType,
     status: String(row.status) as JobStatus,
-    runpodEndpointId: String(row.runpod_endpoint_id ?? ""),
-    runpodJobId: row.runpod_job_id ? String(row.runpod_job_id) : null,
+    providerEndpoint: String(row.provider_endpoint ?? ""),
+    providerJobId: row.provider_job_id ? String(row.provider_job_id) : null,
     promptTemplate: row.prompt_template ? String(row.prompt_template) : null,
     negativePrompt: row.negative_prompt ? String(row.negative_prompt) : null,
     seedValues: parseJsonNumberArray(row.seed_values_json),
@@ -349,7 +349,7 @@ export class AppRepository {
       this.db
         .prepare(
           `INSERT INTO generation_jobs (
-            id, character_id, lora_version_id, job_type, status, runpod_endpoint_id,
+            id, character_id, lora_version_id, job_type, status, provider_endpoint,
             seed_values_json, output_prefix, submitted_at, updated_at
           ) VALUES (?1, ?2, ?3, 'train_lora', 'queued', '', '[]', ?4, ?5, ?5)`
         )
@@ -388,14 +388,14 @@ export class AppRepository {
     return version;
   }
 
-  async updateJobSubmission(jobId: string, endpointId: string, runpodJobId: string): Promise<void> {
+  async updateJobSubmission(jobId: string, endpoint: string, providerJobId: string): Promise<void> {
     await this.db
       .prepare(
         `UPDATE generation_jobs
-         SET runpod_endpoint_id = ?2, runpod_job_id = ?3, updated_at = ?4
+         SET provider_endpoint = ?2, provider_job_id = ?3, updated_at = ?4
          WHERE id = ?1`
       )
-      .bind(jobId, endpointId, runpodJobId, nowIso())
+      .bind(jobId, endpoint, providerJobId, nowIso())
       .run();
   }
 
@@ -408,7 +408,7 @@ export class AppRepository {
       this.db
         .prepare(
           `INSERT INTO generation_jobs (
-            id, character_id, lora_version_id, job_type, status, runpod_endpoint_id,
+            id, character_id, lora_version_id, job_type, status, provider_endpoint,
             prompt_template, negative_prompt, seed_values_json, image_count, output_prefix,
             submitted_at, updated_at
           ) VALUES (?1, ?2, NULL, 'bootstrap', 'queued', '', NULL, NULL, ?3, ?4, ?5, ?6, ?6)`
@@ -438,7 +438,7 @@ export class AppRepository {
     await this.db
       .prepare(
         `INSERT INTO generation_jobs (
-          id, character_id, lora_version_id, job_type, status, runpod_endpoint_id,
+          id, character_id, lora_version_id, job_type, status, provider_endpoint,
           prompt_template, negative_prompt, seed_values_json, aspect_ratio, image_count,
           output_prefix, submitted_at, updated_at
         ) VALUES (?1, ?2, ?3, 'generate', 'queued', '', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10)`

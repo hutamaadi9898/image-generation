@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     }
 
     await repository.updateJobSubmission(job.id, config.baseUrl, serializeProviderJobIds(promptIds));
-    return json({ ok: true, jobId: job.id, runpodJobId: serializeProviderJobIds(promptIds) });
+    return json({ ok: true, jobId: job.id, providerJobId: serializeProviderJobIds(promptIds) });
   } catch (error) {
     if (internalJobId) {
       await repository.applyJobState(

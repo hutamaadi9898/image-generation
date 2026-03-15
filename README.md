@@ -284,7 +284,6 @@ Check:
 
 - LoRA sync from R2 into the ComfyUI Pod is still manual.
 - The legacy `runpod/` serverless workers remain in the repo but are no longer the recommended path.
-- The app keeps the historical `runpodEndpointId` and `runpodJobId` database columns to avoid a migration, even though Pod URLs and Pod job ids are now used there.
 
 ## References
 

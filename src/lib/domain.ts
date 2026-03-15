@@ -85,8 +85,8 @@ export interface JobRecord {
   loraVersionId: string | null;
   type: JobType;
   status: JobStatus;
-  runpodEndpointId: string;
-  runpodJobId: string | null;
+  providerEndpoint: string;
+  providerJobId: string | null;
   promptTemplate: string | null;
   negativePrompt: string | null;
   seedValues: number[];

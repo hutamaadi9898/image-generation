@@ -60,7 +60,7 @@ export const POST: APIRoute = async ({ params, request }) => {
     });
 
     await repository.updateJobSubmission(version.jobId, config.baseUrl, submission.id);
-    return json({ ok: true, jobId: version.jobId, loraVersionId: version.id, runpodJobId: submission.id });
+    return json({ ok: true, jobId: version.jobId, loraVersionId: version.id, providerJobId: submission.id });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Training submission failed.";
     if (internalJobId) {

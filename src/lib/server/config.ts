@@ -7,7 +7,6 @@ export interface AppBindings {
   TRAIN_POD_BASE_URL?: string;
   TRAIN_POD_BEARER_TOKEN?: string;
   JOB_STATUS_POLL_ENABLED?: string;
-  RUNPOD_STATUS_POLL_ENABLED?: string;
   APP_BASE_URL?: string;
   GEMINI_API_KEY?: string;
   GEMINI_MODEL?: string;
@@ -62,7 +61,7 @@ export function requireTrainingPodConfig(env: AppBindings): {
 }
 
 export function isPollingEnabled(env: AppBindings): boolean {
-  return env.JOB_STATUS_POLL_ENABLED !== "false" && env.RUNPOD_STATUS_POLL_ENABLED !== "false";
+  return env.JOB_STATUS_POLL_ENABLED !== "false";
 }
 
 export function requireGeminiConfig(env: AppBindings): { apiKey: string; model: string } {

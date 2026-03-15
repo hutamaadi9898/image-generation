@@ -18,7 +18,7 @@ export async function syncJobStatus(
   jobId: string
 ): Promise<{ changed: boolean }> {
   const job = await repository.getJob(jobId);
-  if (!job || !job.runpodJobId || (job.status !== "queued" && job.status !== "running")) {
+  if (!job || !job.providerJobId || (job.status !== "queued" && job.status !== "running")) {
     return { changed: false };
   }
 
@@ -31,7 +31,7 @@ export async function syncJobStatus(
     const status = await getTrainingPodStatus({
       baseUrl: config.baseUrl,
       bearerToken: config.bearerToken,
-      jobId: job.runpodJobId
+      jobId: job.providerJobId
     });
     const internalStatus = mapProviderStatusToJobStatus(status.status);
     const priorStatus = job.status;
@@ -44,7 +44,7 @@ export async function syncJobStatus(
         output: status.output,
         error: status.error
       } satisfies JobCompletionPayload;
-      const dedupeKey = `${job.runpodJobId}:${status.status}:poll`;
+      const dedupeKey = `${job.providerJobId}:${status.status}:poll`;
       const inserted = await repository.recordJobEvent(job.id, "poller", "status-sync", dedupeKey, payload);
       if (inserted) {
         await repository.applyCompletion(job, payload);
@@ -59,7 +59,7 @@ export async function syncJobStatus(
   }
 
   const config = requireComfyUiConfig(env);
-  const promptIds = parseProviderJobIds(job.runpodJobId);
+  const promptIds = parseProviderJobIds(job.providerJobId);
   if (!promptIds.length) {
     return { changed: false };
   }
@@ -82,7 +82,7 @@ export async function syncJobStatus(
       status: "FAILED",
       error: getComfyUiPromptError(errorEntry.entry) ?? "ComfyUI prompt failed."
     } satisfies JobCompletionPayload;
-    const dedupeKey = `${job.runpodJobId}:FAILED:poll`;
+    const dedupeKey = `${job.providerJobId}:FAILED:poll`;
     const inserted = await repository.recordJobEvent(job.id, "poller", "status-sync", dedupeKey, payload);
     if (inserted) {
       await repository.applyCompletion(job, payload);
@@ -144,7 +144,7 @@ export async function syncJobStatus(
     output: { images },
     providerEventId: buildComfyUiProxyReference(env)
   } satisfies JobCompletionPayload;
-  const dedupeKey = `${job.runpodJobId}:COMPLETED:poll`;
+  const dedupeKey = `${job.providerJobId}:COMPLETED:poll`;
   const inserted = await repository.recordJobEvent(job.id, "poller", "status-sync", dedupeKey, payload);
   if (inserted) {
     await repository.applyCompletion(job, payload);
