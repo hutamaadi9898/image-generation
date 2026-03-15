@@ -9,13 +9,17 @@ import type {
 export function buildBootstrapPayload({
   character,
   promptProfile,
+  job,
   targetCount,
-  seeds
+  seeds,
+  webhookSecret
 }: {
   character: CharacterRecord;
   promptProfile: PromptProfileRecord;
+  job: JobRecord;
   targetCount: number;
   seeds: number[];
+  webhookSecret: string;
 }): Record<string, unknown> {
   return {
     type: "bootstrap",
@@ -34,8 +38,13 @@ export function buildBootstrapPayload({
       negativePrompt: promptProfile.negativePrompt,
       styleTokens: promptProfile.styleTokens
     },
+    outputPrefix: job.outputPrefix,
     targetCount,
-    seeds
+    seeds,
+    callback: {
+      internalJobId: job.id,
+      webhookSecret
+    }
   };
 }
 
@@ -62,6 +71,14 @@ export function buildTrainingPayload({
     characterSlug: character.slug,
     loraVersionId: version.id,
     baseModelId: version.baseModelId,
+    instancePrompt: [
+      "adult original character",
+      character.name,
+      ...character.identityTraits,
+      ...character.styleTokens.slice(0, 3)
+    ]
+      .filter(Boolean)
+      .join(", "),
     approvedR2Keys: approvedKeys,
     outputPath: version.artifactR2Key,
     hyperparameters,
@@ -76,17 +93,21 @@ export function buildGenerationPayload({
   character,
   version,
   input,
-  job
+  job,
+  webhookSecret
 }: {
   character: CharacterRecord;
   version: LoraVersionRecord;
   input: GenerationInput;
   job: JobRecord;
+  webhookSecret: string;
 }): Record<string, unknown> {
   return {
     type: "generate",
     characterId: character.id,
+    characterSlug: character.slug,
     loraVersionId: version.id,
+    baseModelId: version.baseModelId,
     loraArtifactKey: version.artifactR2Key,
     promptTemplate: input.promptTemplate,
     negativePrompt: input.negativePrompt,
@@ -94,6 +115,10 @@ export function buildGenerationPayload({
     seeds: input.seeds,
     aspectRatio: input.aspectRatio,
     imageCount: input.imageCount,
-    outputPrefix: job.outputPrefix
+    outputPrefix: job.outputPrefix,
+    callback: {
+      internalJobId: job.id,
+      webhookSecret
+    }
   };
 }

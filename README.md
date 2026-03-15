@@ -165,7 +165,10 @@ https://<your-account-id>.r2.cloudflarestorage.com
 In the RunPod dashboard:
 
 1. Create a Serverless endpoint.
-2. Use the `bootstrap-generate` image you pushed.
+2. Choose `Import Git Repository`.
+3. Select `hutamaadi9898/image-generation`.
+4. Use branch `main`.
+5. Set Dockerfile Path to `runpod/bootstrap-generate/Dockerfile`.
 3. Give it enough GPU for SDXL inference.
 4. Set these environment variables on the endpoint:
 
@@ -175,19 +178,25 @@ In the RunPod dashboard:
 - `R2_ENDPOINT_URL`
 - `APP_WEBHOOK_URL`
 - `APP_WEBHOOK_SECRET`
-- `MOCK_RUNPOD`
+- `HF_TOKEN` optional
+- `SDXL_BASE_MODEL` optional
 
 Recommended values:
 
 - `APP_WEBHOOK_URL=https://image-generator.hutama39.workers.dev/api/runpod/webhook`
 - `APP_WEBHOOK_SECRET=<same value as RUNPOD_WEBHOOK_SECRET in Cloudflare>`
-- `MOCK_RUNPOD=false`
+- `SDXL_BASE_MODEL=stabilityai/stable-diffusion-xl-base-1.0`
 
 Copy the RunPod endpoint ID. Put it into Cloudflare as `RUNPOD_BOOTSTRAP_ENDPOINT_ID`.
 
 ### 4. Create The Train Endpoint In RunPod
 
-Create a second Serverless endpoint using the `train-lora` image.
+Create a second Serverless endpoint from the same GitHub repo:
+
+1. Choose `Import Git Repository`.
+2. Select `hutamaadi9898/image-generation`.
+3. Use branch `main`.
+4. Set Dockerfile Path to `runpod/train-lora/Dockerfile`.
 
 Set these environment variables:
 
@@ -195,13 +204,16 @@ Set these environment variables:
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
 - `R2_ENDPOINT_URL`
+- `APP_WEBHOOK_URL`
 - `APP_WEBHOOK_SECRET`
-- `MOCK_RUNPOD`
+- `HF_TOKEN` optional
+- `TRAIN_RESOLUTION` optional
 
 Recommended values:
 
+- `APP_WEBHOOK_URL=https://image-generator.hutama39.workers.dev/api/runpod/webhook`
 - `APP_WEBHOOK_SECRET=<same value as RUNPOD_WEBHOOK_SECRET in Cloudflare>`
-- `MOCK_RUNPOD=false`
+- `TRAIN_RESOLUTION=1024`
 
 Copy the endpoint ID. Put it into Cloudflare as `RUNPOD_TRAIN_ENDPOINT_ID`.
 

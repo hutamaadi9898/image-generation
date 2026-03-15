@@ -52,12 +52,12 @@ export const POST: APIRoute = async ({ request }) => {
     const submission = await submitRunPodJob({
       apiKey: config.apiKey,
       endpointId: config.endpointId,
-      webhookUrl: config.webhookUrl,
       input: buildGenerationPayload({
         character,
         version,
         input,
-        job
+        job,
+        webhookSecret: env.RUNPOD_WEBHOOK_SECRET
       })
     });
 

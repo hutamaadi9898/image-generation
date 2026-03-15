@@ -47,7 +47,6 @@ export const POST: APIRoute = async ({ params, request }) => {
     const submission = await submitRunPodJob({
       apiKey: config.apiKey,
       endpointId: config.endpointId,
-      webhookUrl: config.webhookUrl,
       input: buildTrainingPayload({
         character,
         version,

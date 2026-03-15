@@ -68,14 +68,18 @@ describe("job payload builders", () => {
     const payload = buildBootstrapPayload({
       character,
       promptProfile,
+      job,
       targetCount: 96,
-      seeds: [101, 202]
+      seeds: [101, 202],
+      webhookSecret: "secret"
     });
 
     expect(payload.type).toBe("bootstrap");
     expect(payload.targetCount).toBe(96);
     expect(payload.character).toMatchObject({ id: "char_1", slug: "mara-vale" });
     expect(payload.promptProfile).toMatchObject({ label: "Default" });
+    expect(payload.outputPrefix).toBe("mara-vale/generations/job_generate");
+    expect(payload.callback).toMatchObject({ internalJobId: "job_generate", webhookSecret: "secret" });
   });
 
   it("builds training payloads with approved keys and callback data", () => {
@@ -95,6 +99,7 @@ describe("job payload builders", () => {
     expect(payload.outputPath).toBe("mara-vale/v3/lora.safetensors");
     expect(payload.hyperparameters).toMatchObject({ rank: 16, steps: 1200 });
     expect(payload.callback).toMatchObject({ internalJobId: "job_train", webhookSecret: "secret" });
+    expect(payload.instancePrompt).toContain("Mara Vale");
   });
 
   it("builds generation payloads with output prefixes and seeds", () => {
@@ -102,6 +107,7 @@ describe("job payload builders", () => {
       character,
       version,
       job,
+      webhookSecret: "secret",
       input: {
         characterId: "char_1",
         loraVersionId: "lora_1",
@@ -116,5 +122,7 @@ describe("job payload builders", () => {
     expect(payload.loraArtifactKey).toBe("mara-vale/v3/lora.safetensors");
     expect(payload.outputPrefix).toBe("mara-vale/generations/job_generate");
     expect(payload.seeds).toEqual([11, 22]);
+    expect(payload.callback).toMatchObject({ internalJobId: "job_generate", webhookSecret: "secret" });
+    expect(payload.baseModelId).toBe("stabilityai/stable-diffusion-xl-base-1.0");
   });
 });

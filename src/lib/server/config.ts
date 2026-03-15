@@ -32,7 +32,6 @@ export function assertArtifacts(env: AppBindings): R2Bucket {
 export function requireRunPodConfig(env: AppBindings, type: "bootstrap" | "train"): {
   apiKey: string;
   endpointId: string;
-  webhookUrl: string;
 } {
   const endpointId =
     type === "bootstrap" ? env.RUNPOD_BOOTSTRAP_ENDPOINT_ID : env.RUNPOD_TRAIN_ENDPOINT_ID;
@@ -41,14 +40,9 @@ export function requireRunPodConfig(env: AppBindings, type: "bootstrap" | "train
     throw new Error(`RunPod configuration for ${type} jobs is incomplete.`);
   }
 
-  if (!env.APP_BASE_URL) {
-    throw new Error("APP_BASE_URL must be set so RunPod can reach the webhook endpoint.");
-  }
-
   return {
     apiKey: env.RUNPOD_API_KEY,
-    endpointId,
-    webhookUrl: `${env.APP_BASE_URL.replace(/\/$/, "")}/api/runpod/webhook`
+    endpointId
   };
 }
 

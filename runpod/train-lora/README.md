@@ -8,18 +8,21 @@ Expected environment variables:
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
 - `R2_ENDPOINT_URL`
-- `APP_WEBHOOK_SECRET`
-- `MOCK_RUNPOD`
+- `APP_WEBHOOK_URL`
+- `APP_WEBHOOK_SECRET` (optional fallback)
+- `HF_TOKEN` (optional, needed if the base model requires Hugging Face auth)
+- `TRAIN_RESOLUTION` (optional, defaults to `1024`)
 
 Current behavior:
 
 - Validates the expected training payload.
-- Returns deterministic metadata when `MOCK_RUNPOD=true`.
-- Leaves a single `run_training()` integration point for the diffusers SDXL DreamBooth LoRA flow.
+- Downloads approved reference images from R2.
+- Launches the official Hugging Face `train_dreambooth_lora_sdxl.py` script.
+- Uploads the resulting `.safetensors` artifact back to R2.
+- Calls the Astro webhook directly with completion metadata.
 
 Production integration tasks:
 
-1. Download approved dataset keys from R2 into local scratch storage.
-2. Launch the SDXL DreamBooth LoRA training script with the provided hyperparameters.
-3. Upload `lora.safetensors` plus JSON metadata back to R2.
-4. Return `output.artifactR2Key` and `output.metadata` so the Astro webhook can finalize the version row.
+1. Ensure the endpoint uses a GPU tier that can handle SDXL LoRA training.
+2. Set `HF_TOKEN` if the base model cannot be downloaded anonymously.
+3. Tune hyperparameters and `TRAIN_RESOLUTION` for your budget and VRAM target.

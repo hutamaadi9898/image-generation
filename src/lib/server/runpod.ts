@@ -7,7 +7,6 @@ interface RunPodSubmissionRequest {
   apiKey: string;
   endpointId: string;
   input: Record<string, unknown>;
-  webhookUrl: string;
 }
 
 export interface RunPodJobStatusResponse {
@@ -20,8 +19,7 @@ export interface RunPodJobStatusResponse {
 export async function submitRunPodJob({
   apiKey,
   endpointId,
-  input,
-  webhookUrl
+  input
 }: RunPodSubmissionRequest): Promise<{ id: string; status: string }> {
   const response = await fetch(`${RUNPOD_API_BASE}/${endpointId}/run`, {
     method: "POST",
@@ -31,7 +29,6 @@ export async function submitRunPodJob({
     },
     body: JSON.stringify({
       input,
-      webhook: webhookUrl,
       policy: {
         executionTimeout: 3_600_000,
         ttl: 86_400_000,
